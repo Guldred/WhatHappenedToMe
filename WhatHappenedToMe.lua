@@ -7,6 +7,7 @@ WHTM = {}
 WHTM.buffer = nil
 WHTM.inCombat = false
 WHTM.lastCombatTime = 0
+WHTM.playerName = nil
 
 -- Error handler
 function WHTM:HandleError(funcName, err)
@@ -37,6 +38,9 @@ function WHTM:InitializeInternal()
 	
 	-- Create circular buffer
 	self.buffer = CircularBuffer:New(WhatHappenedToMeDB.bufferSize)
+	
+	-- Cache player name for filtering
+	self.playerName = UnitName("player")
 	
 	-- Register events
 	self:RegisterEvents()
@@ -87,6 +91,25 @@ function WHTM:RegisterEvents()
 	
 	-- Health tracking
 	frame:RegisterEvent("UNIT_HEALTH")
+end
+
+function WHTM:IsMessageAboutPlayer(message)
+	if not message then
+		return false
+	end
+	
+	-- Check if message contains "you" or "your" (case-insensitive)
+	local lowerMsg = string.lower(message)
+	if string.find(lowerMsg, "you") or string.find(lowerMsg, "your") then
+		return true
+	end
+	
+	-- Check if message contains player name (using cached name)
+	if self.playerName and string.find(message, self.playerName) then
+		return true
+	end
+	
+	return false
 end
 
 function WHTM:CreateEntry(message, eventType)
@@ -140,16 +163,22 @@ function WHTM:OnEventInternal()
 		self.buffer:Add(self:CreateEntry(arg1, "miss"))
 		
 	elseif event == "CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS" then
-		self.buffer:Add(self:CreateEntry(arg1, "damage"))
+		if self:IsMessageAboutPlayer(arg1) then
+			self.buffer:Add(self:CreateEntry(arg1, "damage"))
+		end
 		
 	elseif event == "CHAT_MSG_COMBAT_HOSTILEPLAYER_MISSES" then
-		self.buffer:Add(self:CreateEntry(arg1, "miss"))
+		if self:IsMessageAboutPlayer(arg1) then
+			self.buffer:Add(self:CreateEntry(arg1, "miss"))
+		end
 		
 	elseif event == "CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE" then
 		self.buffer:Add(self:CreateEntry(arg1, "spell"))
 		
 	elseif event == "CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE" then
-		self.buffer:Add(self:CreateEntry(arg1, "spell"))
+		if self:IsMessageAboutPlayer(arg1) then
+			self.buffer:Add(self:CreateEntry(arg1, "spell"))
+		end
 		
 	elseif event == "CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE" then
 		-- DoTs and debuffs

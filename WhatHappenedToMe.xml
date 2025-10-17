@@ -69,30 +69,30 @@
 			<!-- Scroll Frame -->
 			<ScrollFrame name="$parentScrollFrame" inherits="UIPanelScrollFrameTemplate">
 				<Size>
-					<AbsDimension x="510" y="350"/>
+					<AbsDimension x="500" y="350"/>
 				</Size>
 				<Anchors>
 					<Anchor point="TOP">
 						<Offset>
-							<AbsDimension x="-5" y="-45"/>
+							<AbsDimension x="-10" y="-45"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
 				<ScrollChild>
 					<Frame name="$parentScrollChildFrame">
 						<Size>
-							<AbsDimension x="485" y="350"/>
+							<AbsDimension x="480" y="350"/>
 						</Size>
 						<Layers>
 							<Layer level="ARTWORK">
 								<FontString name="$parentText" inherits="GameFontHighlightSmall" justifyH="LEFT" justifyV="TOP" nonspacewrap="false">
 									<Size>
-										<AbsDimension x="485" y="0"/>
+										<AbsDimension x="480" y="0"/>
 									</Size>
 									<Anchors>
 										<Anchor point="TOPLEFT">
 											<Offset>
-												<AbsDimension x="5" y="0"/>
+												<AbsDimension x="8" y="0"/>
 											</Offset>
 										</Anchor>
 									</Anchors>
