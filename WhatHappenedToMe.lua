@@ -8,6 +8,11 @@ WHTM.buffer = nil
 WHTM.inCombat = false
 WHTM.lastCombatTime = 0
 
+-- Error handler
+function WHTM:HandleError(funcName, err)
+	DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r " .. funcName .. ": " .. tostring(err))
+end
+
 -- Default settings
 WHTM.defaults = {
 	bufferSize = 50,
@@ -18,7 +23,7 @@ WHTM.defaults = {
 }
 
 -- Initialize addon
-function WHTM:Initialize()
+function WHTM:InitializeInternal()
 	-- Load saved variables or use defaults
 	if not WhatHappenedToMeDB then
 		WhatHappenedToMeDB = {}
@@ -40,6 +45,13 @@ function WHTM:Initialize()
 	self:RegisterSlashCommands()
 	
 	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me|r v1.0.0 loaded. Type |cFFFFFF00/whtm|r for commands.")
+end
+
+function WHTM:Initialize()
+	local success, err = pcall(function() WHTM:InitializeInternal() end)
+	if not success then
+		DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Failed to initialize: " .. tostring(err))
+	end
 end
 
 function WHTM:RegisterEvents()
@@ -96,7 +108,7 @@ function WHTM:CreateEntry(message, eventType)
 	}
 end
 
-function WHTM:OnEvent()
+function WHTM:OnEventInternal()
 	if event == "PLAYER_ENTERING_WORLD" then
 		self:Initialize()
 		
@@ -165,7 +177,14 @@ function WHTM:OnEvent()
 	end
 end
 
-function WHTM:OnUpdate(elapsed)
+function WHTM:OnEvent()
+	local success, err = pcall(function() WHTM:OnEventInternal() end)
+	if not success then
+		self:HandleError("OnEvent", err)
+	end
+end
+
+function WHTM:OnUpdateInternal(elapsed)
 	-- Check if we need to show the window after death
 	if self.showScheduled and self.deathTime then
 		if GetTime() - self.deathTime >= WhatHappenedToMeDB.autoShowDelay then
@@ -177,7 +196,14 @@ function WHTM:OnUpdate(elapsed)
 	end
 end
 
-function WHTM:UpdateDisplay()
+function WHTM:OnUpdate(elapsed)
+	local success, err = pcall(function() WHTM:OnUpdateInternal(elapsed) end)
+	if not success then
+		self:HandleError("OnUpdate", err)
+	end
+end
+
+function WHTM:UpdateDisplayInternal()
 	if not WhatHappenedToMeFrame:IsVisible() then
 		return
 	end
@@ -239,43 +265,56 @@ function WHTM:UpdateDisplay()
 	WhatHappenedToMeFrameScrollFrame:UpdateScrollChildRect()
 end
 
+function WHTM:UpdateDisplay()
+	local success, err = pcall(function() WHTM:UpdateDisplayInternal() end)
+	if not success then
+		self:HandleError("UpdateDisplay", err)
+	end
+end
+
 function WHTM:RegisterSlashCommands()
 	SLASH_WHTM1 = "/whtm"
 	SLASH_WHTM2 = "/whathappened"
 	
 	SlashCmdList["WHTM"] = function(msg)
-		local command = string.lower(msg)
-		
-		if command == "show" or command == "" then
-			WhatHappenedToMeFrame:Show()
-			WHTM:UpdateDisplay()
+		local success, err = pcall(function()
+			local command = string.lower(msg)
 			
-		elseif command == "hide" or command == "close" then
-			WhatHappenedToMeFrame:Hide()
-			
-		elseif command == "clear" then
-			WHTM.buffer:Clear()
-			DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Combat log cleared.")
-			WHTM:UpdateDisplay()
-			
-		elseif command == "toggle" then
-			if WhatHappenedToMeFrame:IsVisible() then
-				WhatHappenedToMeFrame:Hide()
-			else
+			if command == "show" or command == "" then
 				WhatHappenedToMeFrame:Show()
 				WHTM:UpdateDisplay()
+				
+			elseif command == "hide" or command == "close" then
+				WhatHappenedToMeFrame:Hide()
+				
+			elseif command == "clear" then
+				WHTM.buffer:Clear()
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Combat log cleared.")
+				WHTM:UpdateDisplay()
+				
+			elseif command == "toggle" then
+				if WhatHappenedToMeFrame:IsVisible() then
+					WhatHappenedToMeFrame:Hide()
+				else
+					WhatHappenedToMeFrame:Show()
+					WHTM:UpdateDisplay()
+				end
+				
+			elseif command == "help" then
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me Commands:|r")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm show|r - Show the combat log window")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm hide|r - Hide the combat log window")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm toggle|r - Toggle the combat log window")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm clear|r - Clear all recorded events")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm help|r - Show this help message")
+				
+			else
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000Unknown command. Type|r |cFFFFFF00/whtm help|r |cFFFF0000for available commands.|r")
 			end
-			
-		elseif command == "help" then
-			DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me Commands:|r")
-			DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm show|r - Show the combat log window")
-			DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm hide|r - Hide the combat log window")
-			DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm toggle|r - Toggle the combat log window")
-			DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm clear|r - Clear all recorded events")
-			DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm help|r - Show this help message")
-			
-		else
-			DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000Unknown command. Type|r |cFFFFFF00/whtm help|r |cFFFF0000for available commands.|r")
+		end)
+		
+		if not success then
+			WHTM:HandleError("SlashCommand", err)
 		end
 	end
 end
