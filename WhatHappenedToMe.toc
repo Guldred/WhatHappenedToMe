@@ -1,0 +1,10 @@
+## Interface: 11200
+## Title: What Happened To Me
+## Notes: Combat log tracker showing what happened to you before death
+## Author: Christian Malak
+## Version: 1.0.0
+## SavedVariables: WhatHappenedToMeDB
+
+CircularBuffer.lua
+WhatHappenedToMe.lua
+WhatHappenedToMe.xml
