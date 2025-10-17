@@ -24,18 +24,6 @@
 		
 		<Layers>
 			<Layer level="ARTWORK">
-				<Texture name="$parentHeaderTexture" file="Interface\DialogFrame\UI-DialogBox-Header">
-					<Size>
-						<AbsDimension x="300" y="64"/>
-					</Size>
-					<Anchors>
-						<Anchor point="TOP">
-							<Offset>
-								<AbsDimension x="0" y="12"/>
-							</Offset>
-						</Anchor>
-					</Anchors>
-				</Texture>
 				<FontString name="$parentTitle" inherits="GameFontNormalLarge" text="What Happened To Me">
 					<Anchors>
 						<Anchor point="TOP">
@@ -66,15 +54,88 @@
 				</Scripts>
 			</Button>
 			
+			<!-- View Tabs -->
+			<Button name="$parentLogButton" inherits="UIPanelButtonTemplate" text="Log">
+				<Size>
+					<AbsDimension x="80" y="22"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="25" y="-28"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						local success, err = pcall(function()
+							WHTM.currentView = "log"
+							WHTM:UpdateDisplay()
+						end)
+						if not success then
+							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Log button: " .. tostring(err))
+						end
+					</OnClick>
+				</Scripts>
+			</Button>
+			
+			<Button name="$parentRecapButton" inherits="UIPanelButtonTemplate" text="Recap">
+				<Size>
+					<AbsDimension x="80" y="22"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOPLEFT" relativeTo="$parentLogButton" relativePoint="TOPRIGHT">
+						<Offset>
+							<AbsDimension x="5" y="0"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						local success, err = pcall(function()
+							WHTM.currentView = "recap"
+							WHTM:UpdateDisplay()
+						end)
+						if not success then
+							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Recap button: " .. tostring(err))
+						end
+					</OnClick>
+				</Scripts>
+			</Button>
+			
+			<Button name="$parentStatsButton" inherits="UIPanelButtonTemplate" text="Stats">
+				<Size>
+					<AbsDimension x="80" y="22"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOPLEFT" relativeTo="$parentRecapButton" relativePoint="TOPRIGHT">
+						<Offset>
+							<AbsDimension x="5" y="0"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						local success, err = pcall(function()
+							WHTM.currentView = "stats"
+							WHTM:UpdateDisplay()
+						end)
+						if not success then
+							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Stats button: " .. tostring(err))
+						end
+					</OnClick>
+				</Scripts>
+			</Button>
+			
 			<!-- Scroll Frame -->
 			<ScrollFrame name="$parentScrollFrame" inherits="UIPanelScrollFrameTemplate">
 				<Size>
-					<AbsDimension x="500" y="350"/>
+					<AbsDimension x="500" y="325"/>
 				</Size>
 				<Anchors>
 					<Anchor point="TOP">
 						<Offset>
-							<AbsDimension x="-10" y="-45"/>
+							<AbsDimension x="-10" y="-58"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
@@ -106,12 +167,12 @@
 			<!-- Clear Button -->
 			<Button name="$parentClearButton" inherits="UIPanelButtonTemplate" text="Clear Log">
 				<Size>
-					<AbsDimension x="110" y="24"/>
+					<AbsDimension x="100" y="24"/>
 				</Size>
 				<Anchors>
 					<Anchor point="BOTTOMLEFT">
 						<Offset>
-							<AbsDimension x="25" y="12"/>
+							<AbsDimension x="30" y="12"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
@@ -119,8 +180,9 @@
 					<OnClick>
 						local success, err = pcall(function()
 							WHTM.buffer:Clear()
+							WHTM.damageStats = {}
 							WHTM:UpdateDisplay()
-							DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Combat log cleared.")
+							DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Combat log and stats cleared.")
 						end)
 						if not success then
 							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Clear button: " .. tostring(err))
@@ -129,15 +191,45 @@
 				</Scripts>
 			</Button>
 			
+			<!-- Export Button -->
+			<Button name="$parentExportButton" inherits="UIPanelButtonTemplate" text="Export">
+				<Size>
+					<AbsDimension x="100" y="24"/>
+				</Size>
+				<Anchors>
+					<Anchor point="BOTTOMLEFT" relativeTo="$parentClearButton" relativePoint="BOTTOMRIGHT">
+						<Offset>
+							<AbsDimension x="15" y="0"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						local success, err = pcall(function()
+							if UnitInRaid("player") then
+								WHTM:ExportToChat("RAID")
+							elseif GetNumPartyMembers() > 0 then
+								WHTM:ExportToChat("PARTY")
+							else
+								WHTM:ExportToChat("SAY")
+							end
+						end)
+						if not success then
+							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Export button: " .. tostring(err))
+						end
+					</OnClick>
+				</Scripts>
+			</Button>
+			
 			<!-- Refresh Button -->
 			<Button name="$parentRefreshButton" inherits="UIPanelButtonTemplate" text="Refresh">
 				<Size>
-					<AbsDimension x="110" y="24"/>
+					<AbsDimension x="100" y="24"/>
 				</Size>
 				<Anchors>
-					<Anchor point="BOTTOM">
+					<Anchor point="BOTTOMLEFT" relativeTo="$parentExportButton" relativePoint="BOTTOMRIGHT">
 						<Offset>
-							<AbsDimension x="0" y="12"/>
+							<AbsDimension x="15" y="0"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
@@ -156,12 +248,12 @@
 			<!-- Close Bottom Button -->
 			<Button name="$parentCloseBottomButton" inherits="UIPanelButtonTemplate" text="Close">
 				<Size>
-					<AbsDimension x="110" y="24"/>
+					<AbsDimension x="100" y="24"/>
 				</Size>
 				<Anchors>
-					<Anchor point="BOTTOMRIGHT">
+					<Anchor point="BOTTOMLEFT" relativeTo="$parentRefreshButton" relativePoint="BOTTOMRIGHT">
 						<Offset>
-							<AbsDimension x="-25" y="12"/>
+							<AbsDimension x="15" y="0"/>
 						</Offset>
 					</Anchor>
 				</Anchors>

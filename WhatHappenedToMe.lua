@@ -8,6 +8,9 @@ WHTM.buffer = nil
 WHTM.inCombat = false
 WHTM.lastCombatTime = 0
 WHTM.playerName = nil
+WHTM.deathRecapTime = 15
+WHTM.damageStats = {}
+WHTM.currentView = "log"  -- log, recap, stats
 
 -- Error handler
 function WHTM:HandleError(funcName, err)
@@ -16,11 +19,14 @@ end
 
 -- Default settings
 WHTM.defaults = {
-	bufferSize = 50,
+	bufferSize = 100,
 	showOnDeath = true,
 	trackHealing = true,
 	trackBuffs = true,
-	autoShowDelay = 1.0  -- Delay in seconds before showing window on death
+	trackMisses = true,
+	autoShowDelay = 1.0,
+	deathRecapSeconds = 15,
+	showDamageNumbers = true
 }
 
 -- Initialize addon
@@ -48,7 +54,7 @@ function WHTM:InitializeInternal()
 	-- Register slash commands
 	self:RegisterSlashCommands()
 	
-	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me|r v1.0.0 loaded. Type |cFFFFFF00/whtm|r for commands.")
+	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me|r v2.0.0 loaded. Type |cFFFFFF00/whtm help|r for commands.")
 end
 
 function WHTM:Initialize()
@@ -112,6 +118,64 @@ function WHTM:IsMessageAboutPlayer(message)
 	return false
 end
 
+function WHTM:ParseDamageAmount(message)
+	-- Try to extract damage number from message
+	-- Using string.gsub for Lua 5.0 compatibility
+	local damage = 0
+	
+	-- Try pattern: "X damage"
+	local _, _, amount = string.find(message, "(%d+) damage")
+	if amount then
+		return tonumber(amount)
+	end
+	
+	-- Try pattern: "for X"
+	_, _, amount = string.find(message, "for (%d+)")
+	if amount then
+		return tonumber(amount)
+	end
+	
+	-- Try pattern: "hits ... for X"
+	_, _, amount = string.find(message, "hits .* for (%d+)")
+	if amount then
+		return tonumber(amount)
+	end
+	
+	-- Try pattern: "crits ... for X"
+	_, _, amount = string.find(message, "crits .* for (%d+)")
+	if amount then
+		return tonumber(amount)
+	end
+	
+	return damage
+end
+
+function WHTM:ParseSource(message)
+	-- Try to extract the source/attacker name
+	-- Using string.find for Lua 5.0 compatibility
+	local source = "Unknown"
+	
+	-- Check for possessive form "Name's"
+	local _, _, possessive = string.find(message, "([%w%s]+)'s ")
+	if possessive then
+		return possessive
+	end
+	
+	-- Check for direct action "Name hits"
+	_, _, possessive = string.find(message, "^([%w%s]+) hits")
+	if possessive then
+		return possessive
+	end
+	
+	-- Check for "Name crits"
+	_, _, possessive = string.find(message, "^([%w%s]+) crits")
+	if possessive then
+		return possessive
+	end
+	
+	return source
+end
+
 function WHTM:CreateEntry(message, eventType)
 	local currentHealth = UnitHealth("player")
 	local maxHealth = UnitHealthMax("player")
@@ -121,13 +185,36 @@ function WHTM:CreateEntry(message, eventType)
 		healthPercent = math.floor((currentHealth / maxHealth) * 100)
 	end
 	
+	local damage = 0
+	local source = nil
+	
+	-- Parse damage amount and source for damage events
+	if eventType == "damage" or eventType == "spell" or eventType == "dot" then
+		damage = self:ParseDamageAmount(message)
+		source = self:ParseSource(message)
+		
+		-- Track damage stats
+		if damage > 0 and source then
+			if not self.damageStats[source] then
+				self.damageStats[source] = {total = 0, count = 0, max = 0}
+			end
+			self.damageStats[source].total = self.damageStats[source].total + damage
+			self.damageStats[source].count = self.damageStats[source].count + 1
+			if damage > self.damageStats[source].max then
+				self.damageStats[source].max = damage
+			end
+		end
+	end
+	
 	return {
 		timestamp = GetTime(),
 		message = message,
 		type = eventType,
 		health = currentHealth,
 		maxHealth = maxHealth,
-		healthPercent = healthPercent
+		healthPercent = healthPercent,
+		damage = damage,
+		source = source
 	}
 end
 
@@ -232,53 +319,140 @@ function WHTM:OnUpdate(elapsed)
 	end
 end
 
+function WHTM:GetDeathRecapEntries()
+	local entries = self.buffer:GetAll()
+	local result = {}
+	local deathTime = self.deathTime or GetTime()
+	local cutoffTime = deathTime - WhatHappenedToMeDB.deathRecapSeconds
+	
+	for i = 1, table.getn(entries) do
+		local entry = entries[i]
+		if entry.timestamp >= cutoffTime and entry.timestamp <= deathTime then
+			table.insert(result, entry)
+		end
+	end
+	
+	return result
+end
+
+function WHTM:GenerateStatsView()
+	local text = "|cFFFFD700=== Damage Statistics ===|r\n\n"
+	
+	if not self.damageStats or self:TableIsEmpty(self.damageStats) then
+		return text .. "|cFFFFFF00No damage data recorded.|r\n"
+	end
+	
+	-- Convert to sorted array
+	local sortedSources = {}
+	for source, stats in pairs(self.damageStats) do
+		table.insert(sortedSources, {name = source, total = stats.total, count = stats.count, max = stats.max})
+	end
+	
+	-- Sort by total damage
+	table.sort(sortedSources, function(a, b) return a.total > b.total end)
+	
+	-- Calculate totals
+	local totalDamage = 0
+	for i = 1, table.getn(sortedSources) do
+		totalDamage = totalDamage + sortedSources[i].total
+	end
+	
+	text = text .. string.format("|cFFFF6666Total Damage Taken: %d|r\n\n", totalDamage)
+	text = text .. "|cFFFFFFFFTop Damage Sources:|r\n"
+	
+	for i = 1, math.min(10, table.getn(sortedSources)) do
+		local source = sortedSources[i]
+		local percent = 0
+		if totalDamage > 0 then
+			percent = math.floor((source.total / totalDamage) * 100)
+		end
+		local avg = math.floor(source.total / source.count)
+		
+		text = text .. string.format("|cFFFF8888%d. %s|r\n", i, source.name)
+		text = text .. string.format("   Total: |cFFFFFFFF%d|r (%d%%) | Hits: |cFFFFFFFF%d|r | Avg: |cFFFFFFFF%d|r | Max: |cFFFFFFFF%d|r\n", 
+			source.total, percent, source.count, avg, source.max)
+	end
+	
+	return text
+end
+
+function WHTM:TableIsEmpty(t)
+	for k, v in pairs(t) do
+		return false
+	end
+	return true
+end
+
 function WHTM:UpdateDisplayInternal()
 	if not WhatHappenedToMeFrame:IsVisible() then
 		return
 	end
 	
-	local entries = self.buffer:GetAll()
 	local text = ""
-	local currentTime = GetTime()
 	
-	if table.getn(entries) == 0 then
-		text = "|cFFFFFF00No combat events recorded.|r\n"
+	-- Choose view based on currentView
+	if self.currentView == "stats" then
+		text = self:GenerateStatsView()
 	else
-		text = "|cFF00FF00=== What Happened To Me ===|r\n\n"
+		-- Log or Recap view
+		local entries
+		if self.currentView == "recap" then
+			entries = self:GetDeathRecapEntries()
+		else
+			entries = self.buffer:GetAll()
+		end
 		
-		for i = 1, table.getn(entries) do
-			local entry = entries[i]
-			local timeAgo = currentTime - entry.timestamp
-			local timeStr = ""
-			
-			if timeAgo < 1 then
-				timeStr = "now"
-			elseif timeAgo < 60 then
-				timeStr = string.format("%ds ago", math.floor(timeAgo))
+		local currentTime = GetTime()
+		
+		if table.getn(entries) == 0 then
+			text = "|cFFFFFF00No combat events recorded.|r\n"
+		else
+			if self.currentView == "recap" then
+				text = "|cFFFF4444=== Death Recap (Last " .. WhatHappenedToMeDB.deathRecapSeconds .. "s) ===|r\n\n"
 			else
-				timeStr = string.format("%dm %ds ago", math.floor(timeAgo / 60), math.floor(math.mod(timeAgo, 60)))
+				text = "|cFF00FF00=== Combat Log ===|r\n\n"
 			end
 			
-			-- Color code by type
-			local color = "|cFFFFFFFF"
-			if entry.type == "damage" or entry.type == "spell" or entry.type == "dot" then
-				color = "|cFFFF4444"  -- Red for damage
-			elseif entry.type == "heal" then
-				color = "|cFF44FF44"  -- Green for healing
-			elseif entry.type == "miss" then
-				color = "|cFFAAAAFF"  -- Light blue for misses
-			elseif entry.type == "aura" then
-				color = "|cFFFFAA44"  -- Orange for auras
+			for i = 1, table.getn(entries) do
+				local entry = entries[i]
+				local timeAgo = currentTime - entry.timestamp
+				local timeStr = ""
+				
+				if timeAgo < 1 then
+					timeStr = "now"
+				elseif timeAgo < 60 then
+					timeStr = string.format("%ds ago", math.floor(timeAgo))
+				else
+					timeStr = string.format("%dm %ds ago", math.floor(timeAgo / 60), math.floor(math.mod(timeAgo, 60)))
+				end
+				
+				-- Color code by type
+				local color = "|cFFFFFFFF"
+				if entry.type == "damage" or entry.type == "spell" or entry.type == "dot" then
+					color = "|cFFFF4444"  -- Red for damage
+				elseif entry.type == "heal" then
+					color = "|cFF44FF44"  -- Green for healing
+				elseif entry.type == "miss" then
+					color = "|cFFAAAAFF"  -- Light blue for misses
+				elseif entry.type == "aura" then
+					color = "|cFFFFAA44"  -- Orange for auras
+				end
+				
+				local damageStr = ""
+				if entry.damage and entry.damage > 0 and WhatHappenedToMeDB.showDamageNumbers then
+					damageStr = string.format(" |cFFFF6666[-%d]|r", entry.damage)
+				end
+				
+				local line = string.format("[%s] %s%s|r%s (HP: %d%%)\n", 
+					timeStr, 
+					color, 
+					entry.message,
+					damageStr,
+					entry.healthPercent
+				)
+				
+				text = text .. line
 			end
-			
-			local line = string.format("[%s] %s%s|r (HP: %d%%)\n", 
-				timeStr, 
-				color, 
-				entry.message, 
-				entry.healthPercent
-			)
-			
-			text = text .. line
 		end
 	end
 	
@@ -301,6 +475,35 @@ function WHTM:UpdateDisplay()
 	end
 end
 
+function WHTM:ExportToChat(channel)
+	local text = ""
+	if self.currentView == "stats" then
+		-- Export damage stats summary
+		if self:TableIsEmpty(self.damageStats) then
+			DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000No stats to export.|r")
+			return
+		end
+		
+		local sortedSources = {}
+		for source, stats in pairs(self.damageStats) do
+			table.insert(sortedSources, {name = source, total = stats.total})
+		end
+		table.sort(sortedSources, function(a, b) return a.total > b.total end)
+		
+		local totalDmg = 0
+		for i = 1, table.getn(sortedSources) do
+			totalDmg = totalDmg + sortedSources[i].total
+		end
+		
+		SendChatMessage("Death Recap - Total Damage: " .. totalDmg, channel)
+		for i = 1, math.min(5, table.getn(sortedSources)) do
+			SendChatMessage(i .. ". " .. sortedSources[i].name .. ": " .. sortedSources[i].total, channel)
+		end
+	else
+		DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00Switch to Stats view to export.|r")
+	end
+end
+
 function WHTM:RegisterSlashCommands()
 	SLASH_WHTM1 = "/whtm"
 	SLASH_WHTM2 = "/whathappened"
@@ -318,7 +521,8 @@ function WHTM:RegisterSlashCommands()
 				
 			elseif command == "clear" then
 				WHTM.buffer:Clear()
-				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Combat log cleared.")
+				WHTM.damageStats = {}
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Combat log and stats cleared.")
 				WHTM:UpdateDisplay()
 				
 			elseif command == "toggle" then
@@ -329,13 +533,40 @@ function WHTM:RegisterSlashCommands()
 					WHTM:UpdateDisplay()
 				end
 				
+			elseif command == "log" then
+				WHTM.currentView = "log"
+				WHTM:UpdateDisplay()
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Switched to Log view.")
+				
+			elseif command == "recap" then
+				WHTM.currentView = "recap"
+				WHTM:UpdateDisplay()
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Switched to Death Recap view.")
+				
+			elseif command == "stats" then
+				WHTM.currentView = "stats"
+				WHTM:UpdateDisplay()
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Switched to Stats view.")
+				
+			elseif command == "export" or command == "export party" then
+				WHTM:ExportToChat("PARTY")
+				
+			elseif command == "export raid" then
+				WHTM:ExportToChat("RAID")
+				
+			elseif command == "export say" then
+				WHTM:ExportToChat("SAY")
+				
 			elseif command == "help" then
 				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me Commands:|r")
-				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm show|r - Show the combat log window")
-				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm hide|r - Hide the combat log window")
-				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm toggle|r - Toggle the combat log window")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm show|r - Show the window")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm hide|r - Hide the window")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm toggle|r - Toggle the window")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm log|r - Switch to Log view")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm recap|r - Switch to Death Recap view")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm stats|r - Switch to Statistics view")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm export [party/raid/say]|r - Export stats to chat")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm clear|r - Clear all recorded events")
-				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm help|r - Show this help message")
 				
 			else
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000Unknown command. Type|r |cFFFFFF00/whtm help|r |cFFFF0000for available commands.|r")
