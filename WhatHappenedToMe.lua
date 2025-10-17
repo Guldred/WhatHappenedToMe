@@ -43,37 +43,38 @@ function WHTM:Initialize()
 end
 
 function WHTM:RegisterEvents()
-	this:RegisterEvent("PLAYER_DEAD")
-	this:RegisterEvent("PLAYER_ALIVE")
-	this:RegisterEvent("PLAYER_UNGHOST")
-	this:RegisterEvent("PLAYER_ENTERING_WORLD")
-	this:RegisterEvent("PLAYER_REGEN_DISABLED")
-	this:RegisterEvent("PLAYER_REGEN_ENABLED")
+	local frame = WhatHappenedToMeFrame
+	frame:RegisterEvent("PLAYER_DEAD")
+	frame:RegisterEvent("PLAYER_ALIVE")
+	frame:RegisterEvent("PLAYER_UNGHOST")
+	frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+	frame:RegisterEvent("PLAYER_REGEN_DISABLED")
+	frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 	
 	-- Damage events
-	this:RegisterEvent("CHAT_MSG_COMBAT_CREATURE_VS_SELF_HITS")
-	this:RegisterEvent("CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES")
-	this:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
-	this:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_MISSES")
-	this:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE")
-	this:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
-	this:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE")
-	this:RegisterEvent("CHAT_MSG_SPELL_DAMAGESHIELDS_ON_SELF")
+	frame:RegisterEvent("CHAT_MSG_COMBAT_CREATURE_VS_SELF_HITS")
+	frame:RegisterEvent("CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES")
+	frame:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS")
+	frame:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_MISSES")
+	frame:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE")
+	frame:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
+	frame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE")
+	frame:RegisterEvent("CHAT_MSG_SPELL_DAMAGESHIELDS_ON_SELF")
 	
 	-- Healing and buff events
 	if WhatHappenedToMeDB.trackHealing then
-		this:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_BUFFS")
-		this:RegisterEvent("CHAT_MSG_SPELL_SELF_BUFF")
+		frame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_BUFFS")
+		frame:RegisterEvent("CHAT_MSG_SPELL_SELF_BUFF")
 	end
 	
 	-- Buff/Debuff changes
 	if WhatHappenedToMeDB.trackBuffs then
-		this:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_SELF")
-		this:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE")
+		frame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_SELF")
+		frame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE")
 	end
 	
 	-- Health tracking
-	this:RegisterEvent("UNIT_HEALTH")
+	frame:RegisterEvent("UNIT_HEALTH")
 end
 
 function WHTM:CreateEntry(message, eventType)
@@ -190,7 +191,8 @@ function WHTM:UpdateDisplay()
 	else
 		text = "|cFF00FF00=== What Happened To Me ===|r\n\n"
 		
-		for i, entry in ipairs(entries) do
+		for i = 1, table.getn(entries) do
+			local entry = entries[i]
 			local timeAgo = currentTime - entry.timestamp
 			local timeStr = ""
 			
@@ -199,7 +201,7 @@ function WHTM:UpdateDisplay()
 			elseif timeAgo < 60 then
 				timeStr = string.format("%ds ago", math.floor(timeAgo))
 			else
-				timeStr = string.format("%dm %ds ago", math.floor(timeAgo / 60), math.floor(timeAgo % 60))
+				timeStr = string.format("%dm %ds ago", math.floor(timeAgo / 60), math.floor(math.mod(timeAgo, 60)))
 			end
 			
 			-- Color code by type
@@ -225,7 +227,7 @@ function WHTM:UpdateDisplay()
 		end
 	end
 	
-	WhatHappenedToMeFrameScrollFrameText:SetText(text)
+	WhatHappenedToMeFrameScrollFrameScrollChildFrameText:SetText(text)
 end
 
 function WHTM:RegisterSlashCommands()
