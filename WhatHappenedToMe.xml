@@ -1,24 +1,25 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
 	
 	<!-- Main Frame -->
-	<Frame name="WhatHappenedToMeFrame" parent="UIParent" movable="true" enableMouse="true" hidden="true" frameStrata="DIALOG">
+	<Frame name="WhatHappenedToMeFrame" parent="UIParent" movable="true" enableMouse="true" hidden="true" frameStrata="DIALOG" toplevel="true">
 		<Size>
-			<AbsDimension x="500" y="400"/>
+			<AbsDimension x="550" y="450"/>
 		</Size>
 		<Anchors>
 			<Anchor point="CENTER"/>
 		</Anchors>
 		
-		<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
+		<Backdrop bgFile="Interface\TutorialFrame\TutorialFrameBackground" edgeFile="Interface\Tooltips\UI-Tooltip-Border" tile="true">
 			<BackgroundInsets>
-				<AbsInset left="11" right="12" top="12" bottom="11"/>
+				<AbsInset left="5" right="5" top="5" bottom="5"/>
 			</BackgroundInsets>
 			<TileSize>
-				<AbsValue val="32"/>
+				<AbsValue val="16"/>
 			</TileSize>
 			<EdgeSize>
-				<AbsValue val="32"/>
+				<AbsValue val="16"/>
 			</EdgeSize>
+			<Color r="0" g="0" b="0" a="0.9"/>
 		</Backdrop>
 		
 		<Layers>
@@ -35,15 +36,15 @@
 						</Anchor>
 					</Anchors>
 				</Texture>
-				<FontString name="$parentTitle" inherits="GameFontNormal">
+				<FontString name="$parentTitle" inherits="GameFontNormalLarge" text="What Happened To Me">
 					<Anchors>
 						<Anchor point="TOP">
 							<Offset>
-								<AbsDimension x="0" y="0"/>
+								<AbsDimension x="0" y="-10"/>
 							</Offset>
 						</Anchor>
 					</Anchors>
-					What Happened To Me
+					<Color r="1.0" g="0.82" b="0.0"/>
 				</FontString>
 			</Layer>
 		</Layers>
@@ -68,28 +69,32 @@
 			<!-- Scroll Frame -->
 			<ScrollFrame name="$parentScrollFrame" inherits="UIPanelScrollFrameTemplate">
 				<Size>
-					<AbsDimension x="460" y="320"/>
+					<AbsDimension x="510" y="350"/>
 				</Size>
 				<Anchors>
-					<Anchor point="TOPLEFT">
+					<Anchor point="TOP">
 						<Offset>
-							<AbsDimension x="15" y="-35"/>
+							<AbsDimension x="-5" y="-45"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
 				<ScrollChild>
 					<Frame name="$parentScrollChildFrame">
 						<Size>
-							<AbsDimension x="440" y="320"/>
+							<AbsDimension x="485" y="350"/>
 						</Size>
 						<Layers>
 							<Layer level="ARTWORK">
-								<FontString name="$parentText" inherits="GameFontNormalSmall" justifyH="LEFT" justifyV="TOP">
+								<FontString name="$parentText" inherits="GameFontHighlightSmall" justifyH="LEFT" justifyV="TOP" nonspacewrap="false">
 									<Size>
-										<AbsDimension x="440" y="0"/>
+										<AbsDimension x="485" y="0"/>
 									</Size>
 									<Anchors>
-										<Anchor point="TOPLEFT"/>
+										<Anchor point="TOPLEFT">
+											<Offset>
+												<AbsDimension x="5" y="0"/>
+											</Offset>
+										</Anchor>
 									</Anchors>
 								</FontString>
 							</Layer>
@@ -101,12 +106,12 @@
 			<!-- Clear Button -->
 			<Button name="$parentClearButton" inherits="UIPanelButtonTemplate" text="Clear Log">
 				<Size>
-					<AbsDimension x="100" y="22"/>
+					<AbsDimension x="110" y="24"/>
 				</Size>
 				<Anchors>
 					<Anchor point="BOTTOMLEFT">
 						<Offset>
-							<AbsDimension x="20" y="15"/>
+							<AbsDimension x="25" y="12"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
@@ -122,12 +127,12 @@
 			<!-- Refresh Button -->
 			<Button name="$parentRefreshButton" inherits="UIPanelButtonTemplate" text="Refresh">
 				<Size>
-					<AbsDimension x="100" y="22"/>
+					<AbsDimension x="110" y="24"/>
 				</Size>
 				<Anchors>
 					<Anchor point="BOTTOM">
 						<Offset>
-							<AbsDimension x="0" y="15"/>
+							<AbsDimension x="0" y="12"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
@@ -141,12 +146,12 @@
 			<!-- Close Bottom Button -->
 			<Button name="$parentCloseBottomButton" inherits="UIPanelButtonTemplate" text="Close">
 				<Size>
-					<AbsDimension x="100" y="22"/>
+					<AbsDimension x="110" y="24"/>
 				</Size>
 				<Anchors>
 					<Anchor point="BOTTOMRIGHT">
 						<Offset>
-							<AbsDimension x="-20" y="15"/>
+							<AbsDimension x="-25" y="12"/>
 						</Offset>
 					</Anchor>
 				</Anchors>

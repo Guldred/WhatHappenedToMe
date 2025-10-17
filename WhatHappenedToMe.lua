@@ -227,7 +227,16 @@ function WHTM:UpdateDisplay()
 		end
 	end
 	
-	WhatHappenedToMeFrameScrollFrameScrollChildFrameText:SetText(text)
+	local textFrame = WhatHappenedToMeFrameScrollFrameScrollChildFrameText
+	textFrame:SetText(text)
+	
+	-- Set the height of the text frame to enable scrolling
+	local textHeight = textFrame:GetHeight()
+	local scrollChildFrame = WhatHappenedToMeFrameScrollFrameScrollChildFrame
+	scrollChildFrame:SetHeight(textHeight)
+	
+	-- Update the scroll frame
+	WhatHappenedToMeFrameScrollFrame:UpdateScrollChildRect()
 end
 
 function WHTM:RegisterSlashCommands()
