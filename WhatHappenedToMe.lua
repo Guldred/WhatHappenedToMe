@@ -83,6 +83,9 @@ function WHTM:RegisterEvents()
 	frame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE")
 	frame:RegisterEvent("CHAT_MSG_SPELL_DAMAGESHIELDS_ON_SELF")
 	
+	-- Environmental damage (falling, drowning, fire)
+	frame:RegisterEvent("CHAT_MSG_COMBAT_SELF_HITS")
+	
 	-- Healing and buff events
 	if WhatHappenedToMeDB.trackHealing then
 		frame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_BUFFS")
@@ -248,6 +251,10 @@ function WHTM:OnEventInternal()
 		
 	elseif event == "CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES" then
 		self.buffer:Add(self:CreateEntry(arg1, "miss"))
+		
+	elseif event == "CHAT_MSG_COMBAT_SELF_HITS" then
+		-- Environmental damage (falling, drowning, fire, etc.)
+		self.buffer:Add(self:CreateEntry(arg1, "damage"))
 		
 	elseif event == "CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS" then
 		if self:IsMessageAboutPlayer(arg1) then
