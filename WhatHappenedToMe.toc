@@ -2,7 +2,7 @@
 ## Title: What Happened To Me
 ## Notes: Combat log tracker showing what happened to you before death
 ## Author: Guldred
-## Version: 0.0.1
+## Version: 1.0.0
 ## SavedVariables: WhatHappenedToMeDB
 
 CircularBuffer.lua
