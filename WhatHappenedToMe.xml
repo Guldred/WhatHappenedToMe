@@ -104,6 +104,25 @@
 				</Layers>
 			</Frame>
 			
+			<!-- Export Button -->
+			<Button name="$parentExportButton" inherits="UIPanelButtonTemplate" text="Export to Chat">
+				<Size>
+					<AbsDimension x="100" y="22"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOPRIGHT">
+						<Offset>
+							<AbsDimension x="-15" y="-30"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						WHTM:ShowExportDialog()
+					</OnClick>
+				</Scripts>
+			</Button>
+			
 			<!-- Scroll Frame -->
 			<ScrollFrame name="$parentScrollFrame" inherits="UIPanelScrollFrameTemplate">
 				<Size>
@@ -167,6 +186,191 @@
 					DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r OnShow: " .. tostring(err))
 				end
 			</OnShow>
+		</Scripts>
+	</Frame>
+	
+	<!-- Export Dialog -->
+	<Frame name="WhatHappenedToMeExportDialog" parent="UIParent" movable="true" enableMouse="true" hidden="true" frameStrata="DIALOG" toplevel="true">
+		<Size>
+			<AbsDimension x="300" y="220"/>
+		</Size>
+		<Anchors>
+			<Anchor point="CENTER"/>
+		</Anchors>
+		
+		<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
+			<BackgroundInsets>
+				<AbsInset left="11" right="12" top="12" bottom="11"/>
+			</BackgroundInsets>
+			<TileSize>
+				<AbsValue val="32"/>
+			</TileSize>
+			<EdgeSize>
+				<AbsValue val="32"/>
+			</EdgeSize>
+		</Backdrop>
+		
+		<Layers>
+			<Layer level="ARTWORK">
+				<FontString name="$parentTitle" inherits="GameFontNormal" text="Export to Chat">
+					<Anchors>
+						<Anchor point="TOP">
+							<Offset>
+								<AbsDimension x="0" y="-15"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				
+				<FontString name="$parentChannelLabel" inherits="GameFontNormalSmall" text="Channel:">
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="25" y="-45"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				
+				<FontString name="$parentCountLabel" inherits="GameFontNormalSmall" text="Number of events:">
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="25" y="-95"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+				
+				<FontString name="$parentTargetLabel" inherits="GameFontNormalSmall" text="Whisper target:">
+					<Anchors>
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="25" y="-120"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
+		
+		<Frames>
+			<!-- Close Button -->
+			<Button name="$parentCloseButton" inherits="UIPanelCloseButton">
+				<Anchors>
+					<Anchor point="TOPRIGHT">
+						<Offset>
+							<AbsDimension x="2" y="2"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						this:GetParent():Hide()
+					</OnClick>
+				</Scripts>
+			</Button>
+			
+			<!-- Channel Dropdown -->
+			<Frame name="$parentChannelDropDown" inherits="UIDropDownMenuTemplate">
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="10" y="-55"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Frame>
+			
+			<!-- Event Count Input -->
+			<EditBox name="$parentCountInput" inherits="InputBoxTemplate" numeric="true" autoFocus="false">
+				<Size>
+					<AbsDimension x="80" y="32"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="145" y="-88"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnLoad>
+						this:SetMaxLetters(3)
+						this:SetText("5")
+					</OnLoad>
+				</Scripts>
+			</EditBox>
+			
+			<!-- Whisper Target Input -->
+			<EditBox name="$parentTargetInput" inherits="InputBoxTemplate" autoFocus="false">
+				<Size>
+					<AbsDimension x="150" y="32"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOPLEFT">
+						<Offset>
+							<AbsDimension x="130" y="-113"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnLoad>
+						this:SetMaxLetters(12)
+						this:Hide()
+					</OnLoad>
+				</Scripts>
+			</EditBox>
+			
+			<!-- Send Button -->
+			<Button name="$parentSendButton" inherits="UIPanelButtonTemplate" text="Send">
+				<Size>
+					<AbsDimension x="100" y="22"/>
+				</Size>
+				<Anchors>
+					<Anchor point="BOTTOM">
+						<Offset>
+							<AbsDimension x="-55" y="20"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						WHTM:ExportToChat()
+					</OnClick>
+				</Scripts>
+			</Button>
+			
+			<!-- Cancel Button -->
+			<Button name="$parentCancelButton" inherits="UIPanelButtonTemplate" text="Cancel">
+				<Size>
+					<AbsDimension x="100" y="22"/>
+				</Size>
+				<Anchors>
+					<Anchor point="BOTTOM">
+						<Offset>
+							<AbsDimension x="55" y="20"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						this:GetParent():Hide()
+					</OnClick>
+				</Scripts>
+			</Button>
+		</Frames>
+		
+		<Scripts>
+			<OnLoad>
+				this:RegisterForDrag("LeftButton")
+			</OnLoad>
+			<OnDragStart>
+				this:StartMoving()
+			</OnDragStart>
+			<OnDragStop>
+				this:StopMovingOrSizing()
+			</OnDragStop>
 		</Scripts>
 	</Frame>
 	

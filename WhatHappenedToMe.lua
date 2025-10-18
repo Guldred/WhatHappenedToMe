@@ -257,6 +257,96 @@ function WHTM:UpdateDisplay()
 	sf:SetVerticalScroll(sf:GetVerticalScrollRange())
 end
 
+WHTM.exportChannel = "SAY"
+
+function WHTM:ShowExportDialog()
+	local dialog = WhatHappenedToMeExportDialog
+	
+	UIDropDownMenu_Initialize(WhatHappenedToMeExportDialogChannelDropDown, function()
+		local info = {}
+		local channels = {
+			{text = "Say", value = "SAY"},
+			{text = "Party", value = "PARTY"},
+			{text = "Raid", value = "RAID"},
+			{text = "Guild", value = "GUILD"},
+			{text = "Whisper", value = "WHISPER"}
+		}
+		
+		for _, channel in ipairs(channels) do
+			local channelValue = channel.value
+			info.text = channel.text
+			info.value = channelValue
+			info.func = function()
+				WHTM.exportChannel = channelValue
+				UIDropDownMenu_SetSelectedValue(WhatHappenedToMeExportDialogChannelDropDown, channelValue)
+				
+				local targetInput = WhatHappenedToMeExportDialogTargetInput
+				local targetLabel = WhatHappenedToMeExportDialogTargetLabel
+				if channelValue == "WHISPER" then
+					targetInput:Show()
+					targetLabel:Show()
+				else
+					targetInput:Hide()
+					targetLabel:Hide()
+				end
+			end
+			info.checked = (WHTM.exportChannel == channelValue)
+			UIDropDownMenu_AddButton(info)
+		end
+	end)
+	
+	UIDropDownMenu_SetSelectedValue(WhatHappenedToMeExportDialogChannelDropDown, WHTM.exportChannel)
+	UIDropDownMenu_SetWidth(150, WhatHappenedToMeExportDialogChannelDropDown)
+	
+	dialog:Show()
+end
+
+function WHTM:ExportToChat()
+	local countInput = WhatHappenedToMeExportDialogCountInput
+	local targetInput = WhatHappenedToMeExportDialogTargetInput
+	
+	local count = tonumber(countInput:GetText()) or 5
+	if count < 1 then count = 1 end
+	if count > 100 then count = 100 end
+	
+	local channel = self.exportChannel
+	local target = nil
+	
+	if channel == "WHISPER" then
+		target = targetInput:GetText()
+		if not target or target == "" then
+			DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000WHTM:|r Please enter a whisper target.")
+			return
+		end
+	end
+	
+	local entries = self.buffer:GetRecent(count)
+	if table.getn(entries) == 0 then
+		DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000WHTM:|r No events to export.")
+		return
+	end
+	
+	for i = 1, table.getn(entries) do
+		local e = entries[i]
+		local timeStr = date("%H:%M:%S", e.wallTime or time())
+		local dmgStr = (e.damage and e.damage > 0) and string.format(" [-%d]", e.damage) or ""
+		local hpStr = (e.prevHealthPercent and e.prevHealthPercent ~= e.healthPercent) and
+		              string.format("(HP: %d%%->%d%%)", e.prevHealthPercent, e.healthPercent) or
+		              string.format("(HP: %d%%)", e.healthPercent)
+		
+		local msg = string.format("[%s] %s%s %s", timeStr, e.message, dmgStr, hpStr)
+		
+		if channel == "WHISPER" then
+			SendChatMessage(msg, channel, nil, target)
+		else
+			SendChatMessage(msg, channel)
+		end
+	end
+	
+	WhatHappenedToMeExportDialog:Hide()
+	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r Exported " .. table.getn(entries) .. " events to " .. channel .. ".")
+end
+
 
 function WHTM:RegisterSlashCommands()
 	SLASH_WHTM1 = "/whtm"
