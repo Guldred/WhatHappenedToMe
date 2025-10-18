@@ -328,7 +328,14 @@ function WHTM:ExportToChat()
 	
 	for i = 1, table.getn(entries) do
 		local e = entries[i]
-		local timeStr = date("%H:%M:%S", e.wallTime or time())
+		local timeStr
+		if WhatHappenedToMeDB.relativeToLastEvent then
+			local lastTime = entries[table.getn(entries)].timestamp
+			timeStr = FormatRelativeTime(lastTime - e.timestamp)
+		else
+			timeStr = FormatTimestamp(e.wallTime or time())
+		end
+		
 		local dmgStr = (e.damage and e.damage > 0) and string.format(" [-%d]", e.damage) or ""
 		local hpStr = (e.prevHealthPercent and e.prevHealthPercent ~= e.healthPercent) and
 		              string.format("(HP: %d%%->%d%%)", e.prevHealthPercent, e.healthPercent) or

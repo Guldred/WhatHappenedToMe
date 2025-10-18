@@ -242,7 +242,7 @@
 					</Anchors>
 				</FontString>
 				
-				<FontString name="$parentTargetLabel" inherits="GameFontNormalSmall" text="Whisper target:">
+				<FontString name="$parentTargetLabel" inherits="GameFontNormalSmall" text="Whisper target:" hidden="true">
 					<Anchors>
 						<Anchor point="TOPLEFT">
 							<Offset>
