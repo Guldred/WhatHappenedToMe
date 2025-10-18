@@ -1,4 +1,3 @@
--- WhatHappenedToMe - Combat log tracker
 WHTM = {
 	buffer = nil,
 	inCombat = false,
