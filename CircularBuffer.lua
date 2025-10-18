@@ -1,79 +1,48 @@
---[[
-	CircularBuffer.lua
-	Circular buffer implementation for storing combat events efficiently
-]]--
-
 CircularBuffer = {}
 
-function CircularBuffer:New(maxSize)
-	local buffer = {
-		entries = {},
-		maxSize = maxSize or 50,
-		currentIndex = 1,
-		count = 0
-	}
-	setmetatable(buffer, self)
+function CircularBuffer:New(size)
+	local buf = {entries = {}, maxSize = size or 50, idx = 1, count = 0}
+	setmetatable(buf, self)
 	self.__index = self
-	return buffer
+	return buf
 end
 
 function CircularBuffer:Add(entry)
-	self.entries[self.currentIndex] = entry
-	self.currentIndex = self.currentIndex + 1
-	
-	if self.currentIndex > self.maxSize then
-		self.currentIndex = 1
-	end
-	
-	if self.count < self.maxSize then
-		self.count = self.count + 1
-	end
+	self.entries[self.idx] = entry
+	self.idx = self.idx + 1
+	if self.idx > self.maxSize then self.idx = 1 end
+	if self.count < self.maxSize then self.count = self.count + 1 end
 end
 
 function CircularBuffer:GetAll()
+	if self.count == 0 then return {} end
+	
 	local result = {}
-	
-	if self.count == 0 then
-		return result
-	end
-	
-	-- If buffer is not full yet, just return entries in order
 	if self.count < self.maxSize then
 		for i = 1, self.count do
 			table.insert(result, self.entries[i])
 		end
-		return result
-	end
-	
-	-- Buffer is full, return in chronological order
-	-- Start from currentIndex (oldest) to currentIndex-1 (newest)
-	for i = 0, self.maxSize - 1 do
-		local index = self.currentIndex + i
-		if index > self.maxSize then
-			index = index - self.maxSize
+	else
+		for i = 0, self.maxSize - 1 do
+			local idx = self.idx + i
+			if idx > self.maxSize then idx = idx - self.maxSize end
+			table.insert(result, self.entries[idx])
 		end
-		table.insert(result, self.entries[index])
 	end
-	
 	return result
 end
 
-function CircularBuffer:GetRecent(count)
+function CircularBuffer:GetRecent(n)
 	local all = self:GetAll()
 	local result = {}
-	local startIndex = math.max(1, table.getn(all) - count + 1)
-	
-	for i = startIndex, table.getn(all) do
+	for i = math.max(1, table.getn(all) - n + 1), table.getn(all) do
 		table.insert(result, all[i])
 	end
-	
 	return result
 end
 
 function CircularBuffer:Clear()
-	self.entries = {}
-	self.currentIndex = 1
-	self.count = 0
+	self.entries, self.idx, self.count = {}, 1, 0
 end
 
 function CircularBuffer:GetCount()
