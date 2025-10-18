@@ -10,7 +10,6 @@ WHTM.lastCombatTime = 0
 WHTM.playerName = nil
 WHTM.damageStats = {}
 WHTM.currentView = "log"  -- log, stats
-WHTM.lastHealthPercent = 100
 
 -- Error handler
 function WHTM:HandleError(funcName, err)
@@ -19,7 +18,7 @@ end
 
 -- Default settings
 WHTM.defaults = {
-	bufferSize = 100,
+	bufferSize = 200,
 	showOnDeath = true,
 	trackHealing = true,
 	trackBuffs = true,
@@ -48,20 +47,13 @@ function WHTM:InitializeInternal()
 	-- Cache player name for filtering
 	self.playerName = UnitName("player")
 	
-	-- Initialize health tracking
-	local currentHealth = UnitHealth("player")
-	local maxHealth = UnitHealthMax("player")
-	if maxHealth > 0 then
-		self.lastHealthPercent = math.floor((currentHealth / maxHealth) * 100)
-	end
-	
 	-- Register events
 	self:RegisterEvents()
 	
 	-- Register slash commands
 	self:RegisterSlashCommands()
 	
-	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me|r v2.0.0 loaded. Type |cFFFFFF00/whtm help|r for commands.")
+	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me|r loaded. Type |cFFFFFF00/whtm|r to show window.")
 end
 
 function WHTM:Initialize()
@@ -190,7 +182,7 @@ function WHTM:CreateEntry(message, eventType)
 	local currentHealth = UnitHealth("player")
 	local maxHealth = UnitHealthMax("player")
 	local healthPercent = 0
-	local prevHealthPercent = self.lastHealthPercent
+	local prevHealthPercent = 0
 	
 	if maxHealth > 0 then
 		healthPercent = math.floor((currentHealth / maxHealth) * 100)
@@ -215,10 +207,33 @@ function WHTM:CreateEntry(message, eventType)
 				self.damageStats[source].max = damage
 			end
 		end
+		
+		-- currentHealth is BEFORE damage in WoW 1.12 (event fires before health update)
+		-- Calculate health AFTER damage
+		prevHealthPercent = healthPercent  -- Before damage
+		if damage > 0 and maxHealth > 0 then
+			local afterHealth = currentHealth - damage
+			if afterHealth < 0 then afterHealth = 0 end
+			healthPercent = math.floor((afterHealth / maxHealth) * 100)
+		end
+		
+	elseif eventType == "heal" then
+		-- Parse heal amount
+		damage = self:ParseDamageAmount(message)
+		
+		-- currentHealth is BEFORE heal
+		-- Calculate health AFTER heal
+		prevHealthPercent = healthPercent  -- Before heal
+		if damage > 0 and maxHealth > 0 then
+			local afterHealth = currentHealth + damage
+			if afterHealth > maxHealth then afterHealth = maxHealth end
+			healthPercent = math.floor((afterHealth / maxHealth) * 100)
+		end
+		
+	else
+		-- For non-damage/heal events, no health change
+		prevHealthPercent = healthPercent
 	end
-	
-	-- Update last health for next event
-	self.lastHealthPercent = healthPercent
 	
 	return {
 		timestamp = GetTime(),
@@ -233,6 +248,12 @@ function WHTM:CreateEntry(message, eventType)
 	}
 end
 
+local function UpdateDisplayIfVisible()
+	if WhatHappenedToMeFrame:IsVisible() then
+		WHTM:UpdateDisplay()
+	end
+end
+
 function WHTM:OnEventInternal()
 	if event == "PLAYER_ENTERING_WORLD" then
 		self:Initialize()
@@ -240,6 +261,8 @@ function WHTM:OnEventInternal()
 	elseif event == "PLAYER_DEAD" then
 		-- Record death event
 		self.buffer:Add(self:CreateEntry("You have died.", "death"))
+
+        UpdateDisplayIfVisible()
 		
 		if WhatHappenedToMeDB.showOnDeath then
 			-- Schedule window to show after a short delay
@@ -263,54 +286,78 @@ function WHTM:OnEventInternal()
 	-- Damage events
 	elseif event == "CHAT_MSG_COMBAT_CREATURE_VS_SELF_HITS" then
 		self.buffer:Add(self:CreateEntry(arg1, "damage"))
+        UpdateDisplayIfVisible()
 		
 	elseif event == "CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES" then
 		self.buffer:Add(self:CreateEntry(arg1, "miss"))
+        UpdateDisplayIfVisible()
 		
 	elseif event == "CHAT_MSG_COMBAT_SELF_HITS" then
 		-- Environmental damage (falling, drowning, fire, etc.)
-		self.buffer:Add(self:CreateEntry(arg1, "damage"))
+		-- Filter: Only track self-damage, not damage TO targets
+		-- Self-damage patterns: "You fall", "You drown", "You are afflicted", "You suffer"
+		-- Outgoing damage patterns: "You hit", "You crit" (followed by target name)
+		local isSelfDamage = string.find(arg1, "You fall") or 
+		                     string.find(arg1, "You drown") or 
+		                     string.find(arg1, "You are afflicted") or
+		                     string.find(arg1, "You suffer") or
+		                     string.find(arg1, "You lose") or
+		                     string.find(arg1, "You take")
+		
+		if isSelfDamage then
+			self.buffer:Add(self:CreateEntry(arg1, "damage"))
+            UpdateDisplayIfVisible()
+		end
 		
 	elseif event == "CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS" then
 		if self:IsMessageAboutPlayer(arg1) then
 			self.buffer:Add(self:CreateEntry(arg1, "damage"))
+            UpdateDisplayIfVisible()
 		end
 		
 	elseif event == "CHAT_MSG_COMBAT_HOSTILEPLAYER_MISSES" then
 		if self:IsMessageAboutPlayer(arg1) then
 			self.buffer:Add(self:CreateEntry(arg1, "miss"))
+            UpdateDisplayIfVisible()
 		end
 		
 	elseif event == "CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE" then
 		self.buffer:Add(self:CreateEntry(arg1, "spell"))
+        UpdateDisplayIfVisible()
 		
 	elseif event == "CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE" then
 		if self:IsMessageAboutPlayer(arg1) then
 			self.buffer:Add(self:CreateEntry(arg1, "spell"))
+            UpdateDisplayIfVisible()
 		end
 		
 	elseif event == "CHAT_MSG_SPELL_PERIODIC_SELF_DAMAGE" then
 		-- DoTs and debuffs
 		self.buffer:Add(self:CreateEntry(arg1, "dot"))
+        UpdateDisplayIfVisible()
 		
 	elseif event == "CHAT_MSG_SPELL_DAMAGESHIELDS_ON_SELF" then
 		self.buffer:Add(self:CreateEntry(arg1, "reflect"))
+        UpdateDisplayIfVisible()
 		
 	-- Healing events
 	elseif event == "CHAT_MSG_SPELL_PERIODIC_SELF_BUFFS" then
 		if WhatHappenedToMeDB.trackHealing then
 			self.buffer:Add(self:CreateEntry(arg1, "heal"))
+            UpdateDisplayIfVisible()
 		end
 		
 	elseif event == "CHAT_MSG_SPELL_SELF_BUFF" then
 		if WhatHappenedToMeDB.trackHealing then
 			self.buffer:Add(self:CreateEntry(arg1, "heal"))
+            UpdateDisplayIfVisible()
 		end
 		
 	-- Buff/Debuff changes
 	elseif event == "CHAT_MSG_SPELL_AURA_GONE_SELF" then
 		if WhatHappenedToMeDB.trackBuffs then
 			self.buffer:Add(self:CreateEntry(arg1, "aura"))
+            UpdateDisplayIfVisible()
 		end
 	end
 end
@@ -458,7 +505,7 @@ function WHTM:UpdateDisplayInternal()
 					damageStr = string.format(" |cFFFF6666[-%d]|r", entry.damage)
 				end
 				
-				-- Health display - show transition if health changed
+				-- Health display - show transition only if percentages are different
 				local healthStr = ""
 				if entry.prevHealthPercent and entry.prevHealthPercent ~= entry.healthPercent then
 					healthStr = string.format("(HP: %d%% -> %d%%)", entry.prevHealthPercent, entry.healthPercent)
@@ -488,7 +535,12 @@ function WHTM:UpdateDisplayInternal()
 	scrollChildFrame:SetHeight(textHeight)
 	
 	-- Update the scroll frame
-	WhatHappenedToMeFrameScrollFrame:UpdateScrollChildRect()
+	local scrollFrame = WhatHappenedToMeFrameScrollFrame
+	scrollFrame:UpdateScrollChildRect()
+	
+	-- Auto-scroll to the bottom
+	local maxScroll = scrollFrame:GetVerticalScrollRange()
+	scrollFrame:SetVerticalScroll(maxScroll)
 end
 
 function WHTM:UpdateDisplay()
@@ -581,6 +633,33 @@ function WHTM:RegisterSlashCommands()
 				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Relative time to last event " .. status .. ".")
 				WHTM:UpdateDisplay()
 				
+			elseif string.find(command, "^buffersize") or string.find(command, "^buffer") then
+				local _, _, sizeStr = string.find(command, "^buffer%s*size?%s+(%d+)")
+				if sizeStr then
+					local newSize = tonumber(sizeStr)
+					if newSize and newSize >= 10 and newSize <= 1000 then
+						-- Save old entries
+						local oldEntries = WHTM.buffer:GetAll()
+						
+						-- Update buffer size
+						WhatHappenedToMeDB.bufferSize = newSize
+						WHTM.buffer = CircularBuffer:New(newSize)
+						
+						-- Restore entries (up to new size)
+						local startIndex = math.max(1, table.getn(oldEntries) - newSize + 1)
+						for i = startIndex, table.getn(oldEntries) do
+							WHTM.buffer:Add(oldEntries[i])
+						end
+						
+						DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Buffer size set to " .. newSize .. ".")
+						WHTM:UpdateDisplay()
+					else
+						DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000Buffer size must be between 10 and 1000.|r")
+					end
+				else
+					DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Current buffer size:|r " .. WhatHappenedToMeDB.bufferSize)
+				end
+				
 			elseif command == "help" then
 				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me Commands:|r")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm show|r - Show the window")
@@ -589,6 +668,7 @@ function WHTM:RegisterSlashCommands()
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm log|r - Switch to Log view")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm stats|r - Switch to Statistics view")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm relative|r - Toggle relative time mode")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm buffersize [number]|r - Set/view buffer size (10-1000)")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm export [party/raid/say]|r - Export stats to chat")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm clear|r - Clear all recorded events")
 				

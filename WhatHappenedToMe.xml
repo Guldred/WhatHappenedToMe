@@ -156,7 +156,7 @@
 			<!-- Scroll Frame -->
 			<ScrollFrame name="$parentScrollFrame" inherits="UIPanelScrollFrameTemplate">
 				<Size>
-					<AbsDimension x="500" y="300"/>
+					<AbsDimension x="500" y="375"/>
 				</Size>
 				<Anchors>
 					<Anchor point="TOP">
@@ -189,106 +189,6 @@
 					</Frame>
 				</ScrollChild>
 			</ScrollFrame>
-			
-			<!-- Clear Button -->
-			<Button name="$parentClearButton" inherits="UIPanelButtonTemplate" text="Clear Log">
-				<Size>
-					<AbsDimension x="100" y="24"/>
-				</Size>
-				<Anchors>
-					<Anchor point="BOTTOMLEFT">
-						<Offset>
-							<AbsDimension x="30" y="12"/>
-						</Offset>
-					</Anchor>
-				</Anchors>
-				<Scripts>
-					<OnClick>
-						local success, err = pcall(function()
-							WHTM.buffer:Clear()
-							WHTM.damageStats = {}
-							WHTM:UpdateDisplay()
-							DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Combat log and stats cleared.")
-						end)
-						if not success then
-							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Clear button: " .. tostring(err))
-						end
-					</OnClick>
-				</Scripts>
-			</Button>
-			
-			<!-- Export Button -->
-			<Button name="$parentExportButton" inherits="UIPanelButtonTemplate" text="Export">
-				<Size>
-					<AbsDimension x="100" y="24"/>
-				</Size>
-				<Anchors>
-					<Anchor point="BOTTOMLEFT" relativeTo="$parentClearButton" relativePoint="BOTTOMRIGHT">
-						<Offset>
-							<AbsDimension x="15" y="0"/>
-						</Offset>
-					</Anchor>
-				</Anchors>
-				<Scripts>
-					<OnClick>
-						local success, err = pcall(function()
-							if UnitInRaid("player") then
-								WHTM:ExportToChat("RAID")
-							elseif GetNumPartyMembers() > 0 then
-								WHTM:ExportToChat("PARTY")
-							else
-								WHTM:ExportToChat("SAY")
-							end
-						end)
-						if not success then
-							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Export button: " .. tostring(err))
-						end
-					</OnClick>
-				</Scripts>
-			</Button>
-			
-			<!-- Refresh Button -->
-			<Button name="$parentRefreshButton" inherits="UIPanelButtonTemplate" text="Refresh">
-				<Size>
-					<AbsDimension x="100" y="24"/>
-				</Size>
-				<Anchors>
-					<Anchor point="BOTTOMLEFT" relativeTo="$parentExportButton" relativePoint="BOTTOMRIGHT">
-						<Offset>
-							<AbsDimension x="15" y="0"/>
-						</Offset>
-					</Anchor>
-				</Anchors>
-				<Scripts>
-					<OnClick>
-						local success, err = pcall(function()
-							WHTM:UpdateDisplay()
-						end)
-						if not success then
-							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Refresh button: " .. tostring(err))
-						end
-					</OnClick>
-				</Scripts>
-			</Button>
-			
-			<!-- Close Bottom Button -->
-			<Button name="$parentCloseBottomButton" inherits="UIPanelButtonTemplate" text="Close">
-				<Size>
-					<AbsDimension x="100" y="24"/>
-				</Size>
-				<Anchors>
-					<Anchor point="BOTTOMLEFT" relativeTo="$parentRefreshButton" relativePoint="BOTTOMRIGHT">
-						<Offset>
-							<AbsDimension x="15" y="0"/>
-						</Offset>
-					</Anchor>
-				</Anchors>
-				<Scripts>
-					<OnClick>
-						WhatHappenedToMeFrame:Hide()
-					</OnClick>
-				</Scripts>
-			</Button>
 		</Frames>
 		
 		<Scripts>
