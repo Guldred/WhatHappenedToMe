@@ -57,7 +57,7 @@
 			<!-- View Tabs -->
 			<Button name="$parentLogButton" inherits="UIPanelButtonTemplate" text="Log">
 				<Size>
-					<AbsDimension x="80" y="22"/>
+					<AbsDimension x="100" y="22"/>
 				</Size>
 				<Anchors>
 					<Anchor point="TOPLEFT">
@@ -79,36 +79,12 @@
 				</Scripts>
 			</Button>
 			
-			<Button name="$parentRecapButton" inherits="UIPanelButtonTemplate" text="Recap">
+			<Button name="$parentStatsButton" inherits="UIPanelButtonTemplate" text="Stats">
 				<Size>
-					<AbsDimension x="80" y="22"/>
+					<AbsDimension x="100" y="22"/>
 				</Size>
 				<Anchors>
 					<Anchor point="TOPLEFT" relativeTo="$parentLogButton" relativePoint="TOPRIGHT">
-						<Offset>
-							<AbsDimension x="5" y="0"/>
-						</Offset>
-					</Anchor>
-				</Anchors>
-				<Scripts>
-					<OnClick>
-						local success, err = pcall(function()
-							WHTM.currentView = "recap"
-							WHTM:UpdateDisplay()
-						end)
-						if not success then
-							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Recap button: " .. tostring(err))
-						end
-					</OnClick>
-				</Scripts>
-			</Button>
-			
-			<Button name="$parentStatsButton" inherits="UIPanelButtonTemplate" text="Stats">
-				<Size>
-					<AbsDimension x="80" y="22"/>
-				</Size>
-				<Anchors>
-					<Anchor point="TOPLEFT" relativeTo="$parentRecapButton" relativePoint="TOPRIGHT">
 						<Offset>
 							<AbsDimension x="5" y="0"/>
 						</Offset>
@@ -127,15 +103,65 @@
 				</Scripts>
 			</Button>
 			
+			<!-- Relative Time Checkbox -->
+			<CheckButton name="$parentRelativeTimeCheck">
+				<Size>
+					<AbsDimension x="24" y="24"/>
+				</Size>
+				<Anchors>
+					<Anchor point="TOPLEFT" relativeTo="$parentStatsButton" relativePoint="TOPRIGHT">
+						<Offset>
+							<AbsDimension x="20" y="0"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<NormalTexture file="Interface\Buttons\UI-CheckBox-Up"/>
+				<PushedTexture file="Interface\Buttons\UI-CheckBox-Down"/>
+				<HighlightTexture file="Interface\Buttons\UI-CheckBox-Highlight" alphaMode="ADD"/>
+				<CheckedTexture file="Interface\Buttons\UI-CheckBox-Check"/>
+				<Scripts>
+					<OnClick>
+						WhatHappenedToMeDB.relativeToLastEvent = this:GetChecked()
+						WHTM:UpdateDisplay()
+					</OnClick>
+					<OnShow>
+						this:SetChecked(WhatHappenedToMeDB.relativeToLastEvent)
+					</OnShow>
+				</Scripts>
+			</CheckButton>
+			
+			<!-- Checkbox Label -->
+			<Frame name="$parentRelativeTimeLabel">
+				<Size>
+					<AbsDimension x="150" y="24"/>
+				</Size>
+				<Anchors>
+					<Anchor point="LEFT" relativeTo="$parentRelativeTimeCheck" relativePoint="RIGHT">
+						<Offset>
+							<AbsDimension x="5" y="0"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Layers>
+					<Layer level="ARTWORK">
+						<FontString inherits="GameFontNormalSmall" justifyH="LEFT" text="Time to last event">
+							<Anchors>
+								<Anchor point="LEFT"/>
+							</Anchors>
+						</FontString>
+					</Layer>
+				</Layers>
+			</Frame>
+			
 			<!-- Scroll Frame -->
 			<ScrollFrame name="$parentScrollFrame" inherits="UIPanelScrollFrameTemplate">
 				<Size>
-					<AbsDimension x="500" y="325"/>
+					<AbsDimension x="500" y="300"/>
 				</Size>
 				<Anchors>
 					<Anchor point="TOP">
 						<Offset>
-							<AbsDimension x="-10" y="-58"/>
+							<AbsDimension x="-10" y="-63"/>
 						</Offset>
 					</Anchor>
 				</Anchors>

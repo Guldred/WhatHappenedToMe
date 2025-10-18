@@ -8,9 +8,9 @@ WHTM.buffer = nil
 WHTM.inCombat = false
 WHTM.lastCombatTime = 0
 WHTM.playerName = nil
-WHTM.deathRecapTime = 15
 WHTM.damageStats = {}
-WHTM.currentView = "log"  -- log, recap, stats
+WHTM.currentView = "log"  -- log, stats
+WHTM.lastHealthPercent = 100
 
 -- Error handler
 function WHTM:HandleError(funcName, err)
@@ -25,8 +25,8 @@ WHTM.defaults = {
 	trackBuffs = true,
 	trackMisses = true,
 	autoShowDelay = 1.0,
-	deathRecapSeconds = 15,
-	showDamageNumbers = true
+	showDamageNumbers = true,
+	relativeToLastEvent = false
 }
 
 -- Initialize addon
@@ -47,6 +47,13 @@ function WHTM:InitializeInternal()
 	
 	-- Cache player name for filtering
 	self.playerName = UnitName("player")
+	
+	-- Initialize health tracking
+	local currentHealth = UnitHealth("player")
+	local maxHealth = UnitHealthMax("player")
+	if maxHealth > 0 then
+		self.lastHealthPercent = math.floor((currentHealth / maxHealth) * 100)
+	end
 	
 	-- Register events
 	self:RegisterEvents()
@@ -183,6 +190,7 @@ function WHTM:CreateEntry(message, eventType)
 	local currentHealth = UnitHealth("player")
 	local maxHealth = UnitHealthMax("player")
 	local healthPercent = 0
+	local prevHealthPercent = self.lastHealthPercent
 	
 	if maxHealth > 0 then
 		healthPercent = math.floor((currentHealth / maxHealth) * 100)
@@ -209,6 +217,9 @@ function WHTM:CreateEntry(message, eventType)
 		end
 	end
 	
+	-- Update last health for next event
+	self.lastHealthPercent = healthPercent
+	
 	return {
 		timestamp = GetTime(),
 		message = message,
@@ -216,6 +227,7 @@ function WHTM:CreateEntry(message, eventType)
 		health = currentHealth,
 		maxHealth = maxHealth,
 		healthPercent = healthPercent,
+		prevHealthPercent = prevHealthPercent,
 		damage = damage,
 		source = source
 	}
@@ -226,6 +238,9 @@ function WHTM:OnEventInternal()
 		self:Initialize()
 		
 	elseif event == "PLAYER_DEAD" then
+		-- Record death event
+		self.buffer:Add(self:CreateEntry("You have died.", "death"))
+		
 		if WhatHappenedToMeDB.showOnDeath then
 			-- Schedule window to show after a short delay
 			self.deathTime = GetTime()
@@ -326,22 +341,6 @@ function WHTM:OnUpdate(elapsed)
 	end
 end
 
-function WHTM:GetDeathRecapEntries()
-	local entries = self.buffer:GetAll()
-	local result = {}
-	local deathTime = self.deathTime or GetTime()
-	local cutoffTime = deathTime - WhatHappenedToMeDB.deathRecapSeconds
-	
-	for i = 1, table.getn(entries) do
-		local entry = entries[i]
-		if entry.timestamp >= cutoffTime and entry.timestamp <= deathTime then
-			table.insert(result, entry)
-		end
-	end
-	
-	return result
-end
-
 function WHTM:GenerateStatsView()
 	local text = "|cFFFFD700=== Damage Statistics ===|r\n\n"
 	
@@ -401,36 +400,43 @@ function WHTM:UpdateDisplayInternal()
 	if self.currentView == "stats" then
 		text = self:GenerateStatsView()
 	else
-		-- Log or Recap view
-		local entries
-		if self.currentView == "recap" then
-			entries = self:GetDeathRecapEntries()
-		else
-			entries = self.buffer:GetAll()
-		end
+		-- Log view
+		local entries = self.buffer:GetAll()
+		local referenceTime = GetTime()
 		
-		local currentTime = GetTime()
+		-- Use last event time if relative mode is enabled
+		if WhatHappenedToMeDB.relativeToLastEvent and table.getn(entries) > 0 then
+			referenceTime = entries[table.getn(entries)].timestamp
+		end
 		
 		if table.getn(entries) == 0 then
 			text = "|cFFFFFF00No combat events recorded.|r\n"
 		else
-			if self.currentView == "recap" then
-				text = "|cFFFF4444=== Death Recap (Last " .. WhatHappenedToMeDB.deathRecapSeconds .. "s) ===|r\n\n"
-			else
-				text = "|cFF00FF00=== Combat Log ===|r\n\n"
-			end
+			text = "|cFF00FF00=== Combat Log ===|r\n\n"
 			
 			for i = 1, table.getn(entries) do
 				local entry = entries[i]
-				local timeAgo = currentTime - entry.timestamp
+				local timeDiff = referenceTime - entry.timestamp
 				local timeStr = ""
 				
-				if timeAgo < 1 then
-					timeStr = "now"
-				elseif timeAgo < 60 then
-					timeStr = string.format("%ds ago", math.floor(timeAgo))
+				if WhatHappenedToMeDB.relativeToLastEvent then
+					-- Show time before last event
+					if timeDiff < 1 then
+						timeStr = "0s"
+					elseif timeDiff < 60 then
+						timeStr = string.format("-%ds", math.floor(timeDiff))
+					else
+						timeStr = string.format("-%dm %ds", math.floor(timeDiff / 60), math.floor(math.mod(timeDiff, 60)))
+					end
 				else
-					timeStr = string.format("%dm %ds ago", math.floor(timeAgo / 60), math.floor(math.mod(timeAgo, 60)))
+					-- Show time ago from now
+					if timeDiff < 1 then
+						timeStr = "now"
+					elseif timeDiff < 60 then
+						timeStr = string.format("%ds ago", math.floor(timeDiff))
+					else
+						timeStr = string.format("%dm %ds ago", math.floor(timeDiff / 60), math.floor(math.mod(timeDiff, 60)))
+					end
 				end
 				
 				-- Color code by type
@@ -443,6 +449,8 @@ function WHTM:UpdateDisplayInternal()
 					color = "|cFFAAAAFF"  -- Light blue for misses
 				elseif entry.type == "aura" then
 					color = "|cFFFFAA44"  -- Orange for auras
+				elseif entry.type == "death" then
+					color = "|cFFFF0000"  -- Bright red for death
 				end
 				
 				local damageStr = ""
@@ -450,12 +458,20 @@ function WHTM:UpdateDisplayInternal()
 					damageStr = string.format(" |cFFFF6666[-%d]|r", entry.damage)
 				end
 				
-				local line = string.format("[%s] %s%s|r%s (HP: %d%%)\n", 
+				-- Health display - show transition if health changed
+				local healthStr = ""
+				if entry.prevHealthPercent and entry.prevHealthPercent ~= entry.healthPercent then
+					healthStr = string.format("(HP: %d%% -> %d%%)", entry.prevHealthPercent, entry.healthPercent)
+				else
+					healthStr = string.format("(HP: %d%%)", entry.healthPercent)
+				end
+				
+				local line = string.format("[%s] %s%s|r%s %s\n", 
 					timeStr, 
 					color, 
 					entry.message,
 					damageStr,
-					entry.healthPercent
+					healthStr
 				)
 				
 				text = text .. line
@@ -545,11 +561,6 @@ function WHTM:RegisterSlashCommands()
 				WHTM:UpdateDisplay()
 				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Switched to Log view.")
 				
-			elseif command == "recap" then
-				WHTM.currentView = "recap"
-				WHTM:UpdateDisplay()
-				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Switched to Death Recap view.")
-				
 			elseif command == "stats" then
 				WHTM.currentView = "stats"
 				WHTM:UpdateDisplay()
@@ -564,14 +575,20 @@ function WHTM:RegisterSlashCommands()
 			elseif command == "export say" then
 				WHTM:ExportToChat("SAY")
 				
+			elseif command == "relative" then
+				WhatHappenedToMeDB.relativeToLastEvent = not WhatHappenedToMeDB.relativeToLastEvent
+				local status = WhatHappenedToMeDB.relativeToLastEvent and "enabled" or "disabled"
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Relative time to last event " .. status .. ".")
+				WHTM:UpdateDisplay()
+				
 			elseif command == "help" then
 				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me Commands:|r")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm show|r - Show the window")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm hide|r - Hide the window")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm toggle|r - Toggle the window")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm log|r - Switch to Log view")
-				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm recap|r - Switch to Death Recap view")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm stats|r - Switch to Statistics view")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm relative|r - Toggle relative time mode")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm export [party/raid/say]|r - Export stats to chat")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm clear|r - Clear all recorded events")
 				
