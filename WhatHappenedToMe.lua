@@ -9,7 +9,6 @@ WHTM.inCombat = false
 WHTM.lastCombatTime = 0
 WHTM.playerName = nil
 WHTM.damageStats = {}
-WHTM.currentView = "log"  -- log, stats
 
 -- Error handler
 function WHTM:HandleError(funcName, err)
@@ -388,53 +387,6 @@ function WHTM:OnUpdate(elapsed)
 	end
 end
 
-function WHTM:GenerateStatsView()
-	local text = "|cFFFFD700=== Damage Statistics ===|r\n\n"
-	
-	if not self.damageStats or self:TableIsEmpty(self.damageStats) then
-		return text .. "|cFFFFFF00No damage data recorded.|r\n"
-	end
-	
-	-- Convert to sorted array
-	local sortedSources = {}
-	for source, stats in pairs(self.damageStats) do
-		table.insert(sortedSources, {name = source, total = stats.total, count = stats.count, max = stats.max})
-	end
-	
-	-- Sort by total damage
-	table.sort(sortedSources, function(a, b) return a.total > b.total end)
-	
-	-- Calculate totals
-	local totalDamage = 0
-	for i = 1, table.getn(sortedSources) do
-		totalDamage = totalDamage + sortedSources[i].total
-	end
-	
-	text = text .. string.format("|cFFFF6666Total Damage Taken: %d|r\n\n", totalDamage)
-	text = text .. "|cFFFFFFFFTop Damage Sources:|r\n"
-	
-	for i = 1, math.min(10, table.getn(sortedSources)) do
-		local source = sortedSources[i]
-		local percent = 0
-		if totalDamage > 0 then
-			percent = math.floor((source.total / totalDamage) * 100)
-		end
-		local avg = math.floor(source.total / source.count)
-		
-		text = text .. string.format("|cFFFF8888%d. %s|r\n", i, source.name)
-		text = text .. string.format("   Total: |cFFFFFFFF%d|r (%d%%) | Hits: |cFFFFFFFF%d|r | Avg: |cFFFFFFFF%d|r | Max: |cFFFFFFFF%d|r\n", 
-			source.total, percent, source.count, avg, source.max)
-	end
-	
-	return text
-end
-
-function WHTM:TableIsEmpty(t)
-	for k, v in pairs(t) do
-		return false
-	end
-	return true
-end
 
 function WHTM:UpdateDisplayInternal()
 	if not WhatHappenedToMeFrame:IsVisible() then
@@ -442,87 +394,80 @@ function WHTM:UpdateDisplayInternal()
 	end
 	
 	local text = ""
+	local entries = self.buffer:GetAll()
+	local referenceTime = GetTime()
 	
-	-- Choose view based on currentView
-	if self.currentView == "stats" then
-		text = self:GenerateStatsView()
+	-- Use last event time if relative mode is enabled
+	if WhatHappenedToMeDB.relativeToLastEvent and table.getn(entries) > 0 then
+		referenceTime = entries[table.getn(entries)].timestamp
+	end
+	
+	if table.getn(entries) == 0 then
+		text = "|cFFFFFF00No combat events recorded.|r\n"
 	else
-		-- Log view
-		local entries = self.buffer:GetAll()
-		local referenceTime = GetTime()
+		text = "|cFF00FF00=== Combat Log ===|r\n\n"
 		
-		-- Use last event time if relative mode is enabled
-		if WhatHappenedToMeDB.relativeToLastEvent and table.getn(entries) > 0 then
-			referenceTime = entries[table.getn(entries)].timestamp
-		end
-		
-		if table.getn(entries) == 0 then
-			text = "|cFFFFFF00No combat events recorded.|r\n"
-		else
-			text = "|cFF00FF00=== Combat Log ===|r\n\n"
+		for i = 1, table.getn(entries) do
+			local entry = entries[i]
+			local timeDiff = referenceTime - entry.timestamp
+			local timeStr = ""
 			
-			for i = 1, table.getn(entries) do
-				local entry = entries[i]
-				local timeDiff = referenceTime - entry.timestamp
-				local timeStr = ""
-				
-				if WhatHappenedToMeDB.relativeToLastEvent then
-					-- Show time before last event
-					if timeDiff < 1 then
-						timeStr = "0s"
-					elseif timeDiff < 60 then
-						timeStr = string.format("-%ds", math.floor(timeDiff))
-					else
-						timeStr = string.format("-%dm %ds", math.floor(timeDiff / 60), math.floor(math.mod(timeDiff, 60)))
-					end
+			if WhatHappenedToMeDB.relativeToLastEvent then
+				-- Show time before last event
+				if timeDiff < 1 then
+					timeStr = "0s"
+				elseif timeDiff < 60 then
+					timeStr = string.format("-%ds", math.floor(timeDiff))
 				else
-					-- Show time ago from now
-					if timeDiff < 1 then
-						timeStr = "now"
-					elseif timeDiff < 60 then
-						timeStr = string.format("%ds ago", math.floor(timeDiff))
-					else
-						timeStr = string.format("%dm %ds ago", math.floor(timeDiff / 60), math.floor(math.mod(timeDiff, 60)))
-					end
+					timeStr = string.format("-%dm %ds", math.floor(timeDiff / 60), math.floor(math.mod(timeDiff, 60)))
 				end
-				
-				-- Color code by type
-				local color = "|cFFFFFFFF"
-				if entry.type == "damage" or entry.type == "spell" or entry.type == "dot" then
-					color = "|cFFFF4444"  -- Red for damage
-				elseif entry.type == "heal" then
-					color = "|cFF44FF44"  -- Green for healing
-				elseif entry.type == "miss" then
-					color = "|cFFAAAAFF"  -- Light blue for misses
-				elseif entry.type == "aura" then
-					color = "|cFFFFAA44"  -- Orange for auras
-				elseif entry.type == "death" then
-					color = "|cFFFF0000"  -- Bright red for death
-				end
-				
-				local damageStr = ""
-				if entry.damage and entry.damage > 0 and WhatHappenedToMeDB.showDamageNumbers then
-					damageStr = string.format(" |cFFFF6666[-%d]|r", entry.damage)
-				end
-				
-				-- Health display - show transition only if percentages are different
-				local healthStr = ""
-				if entry.prevHealthPercent and entry.prevHealthPercent ~= entry.healthPercent then
-					healthStr = string.format("(HP: %d%% -> %d%%)", entry.prevHealthPercent, entry.healthPercent)
+			else
+				-- Show time ago from now
+				if timeDiff < 1 then
+					timeStr = "now"
+				elseif timeDiff < 60 then
+					timeStr = string.format("%ds ago", math.floor(timeDiff))
 				else
-					healthStr = string.format("(HP: %d%%)", entry.healthPercent)
+					timeStr = string.format("%dm %ds ago", math.floor(timeDiff / 60), math.floor(math.mod(timeDiff, 60)))
 				end
-				
-				local line = string.format("[%s] %s%s|r%s %s\n", 
-					timeStr, 
-					color, 
-					entry.message,
-					damageStr,
-					healthStr
-				)
-				
-				text = text .. line
 			end
+			
+			-- Color code by type
+			local color = "|cFFFFFFFF"
+			if entry.type == "damage" or entry.type == "spell" or entry.type == "dot" then
+				color = "|cFFFF4444"  -- Red for damage
+			elseif entry.type == "heal" then
+				color = "|cFF44FF44"  -- Green for healing
+			elseif entry.type == "miss" then
+				color = "|cFFAAAAFF"  -- Light blue for misses
+			elseif entry.type == "aura" then
+				color = "|cFFFFAA44"  -- Orange for auras
+			elseif entry.type == "death" then
+				color = "|cFFFF0000"  -- Bright red for death
+			end
+			
+			local damageStr = ""
+			if entry.damage and entry.damage > 0 and WhatHappenedToMeDB.showDamageNumbers then
+				damageStr = string.format(" |cFFFF6666[-%d]|r", entry.damage)
+			end
+			
+			-- Health display - show transition only if percentages are different
+			local healthStr = ""
+			if entry.prevHealthPercent and entry.prevHealthPercent ~= entry.healthPercent then
+				healthStr = string.format("(HP: %d%% -> %d%%)", entry.prevHealthPercent, entry.healthPercent)
+			else
+				healthStr = string.format("(HP: %d%%)", entry.healthPercent)
+			end
+			
+			local line = string.format("[%s] %s%s|r%s %s\n", 
+				timeStr, 
+				color, 
+				entry.message,
+				damageStr,
+				healthStr
+			)
+			
+			text = text .. line
 		end
 	end
 	
@@ -550,34 +495,6 @@ function WHTM:UpdateDisplay()
 	end
 end
 
-function WHTM:ExportToChat(channel)
-	local text = ""
-	if self.currentView == "stats" then
-		-- Export damage stats summary
-		if self:TableIsEmpty(self.damageStats) then
-			DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000No stats to export.|r")
-			return
-		end
-		
-		local sortedSources = {}
-		for source, stats in pairs(self.damageStats) do
-			table.insert(sortedSources, {name = source, total = stats.total})
-		end
-		table.sort(sortedSources, function(a, b) return a.total > b.total end)
-		
-		local totalDmg = 0
-		for i = 1, table.getn(sortedSources) do
-			totalDmg = totalDmg + sortedSources[i].total
-		end
-		
-		SendChatMessage("Death Recap - Total Damage: " .. totalDmg, channel)
-		for i = 1, math.min(5, table.getn(sortedSources)) do
-			SendChatMessage(i .. ". " .. sortedSources[i].name .. ": " .. sortedSources[i].total, channel)
-		end
-	else
-		DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00Switch to Stats view to export.|r")
-	end
-end
 
 function WHTM:RegisterSlashCommands()
 	SLASH_WHTM1 = "/whtm"
@@ -607,25 +524,6 @@ function WHTM:RegisterSlashCommands()
 					WhatHappenedToMeFrame:Show()
 					WHTM:UpdateDisplay()
 				end
-				
-			elseif command == "log" then
-				WHTM.currentView = "log"
-				WHTM:UpdateDisplay()
-				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Switched to Log view.")
-				
-			elseif command == "stats" then
-				WHTM.currentView = "stats"
-				WHTM:UpdateDisplay()
-				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me:|r Switched to Stats view.")
-				
-			elseif command == "export" or command == "export party" then
-				WHTM:ExportToChat("PARTY")
-				
-			elseif command == "export raid" then
-				WHTM:ExportToChat("RAID")
-				
-			elseif command == "export say" then
-				WHTM:ExportToChat("SAY")
 				
 			elseif command == "relative" then
 				WhatHappenedToMeDB.relativeToLastEvent = not WhatHappenedToMeDB.relativeToLastEvent
@@ -665,11 +563,8 @@ function WHTM:RegisterSlashCommands()
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm show|r - Show the window")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm hide|r - Hide the window")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm toggle|r - Toggle the window")
-				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm log|r - Switch to Log view")
-				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm stats|r - Switch to Statistics view")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm relative|r - Toggle relative time mode")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm buffersize [number]|r - Set/view buffer size (10-1000)")
-				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm export [party/raid/say]|r - Export stats to chat")
 				DEFAULT_CHAT_FRAME:AddMessage("|cFFFFFF00/whtm clear|r - Clear all recorded events")
 				
 			else

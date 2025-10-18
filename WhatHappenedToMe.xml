@@ -54,64 +54,15 @@
 				</Scripts>
 			</Button>
 			
-			<!-- View Tabs -->
-			<Button name="$parentLogButton" inherits="UIPanelButtonTemplate" text="Log">
-				<Size>
-					<AbsDimension x="100" y="22"/>
-				</Size>
-				<Anchors>
-					<Anchor point="TOPLEFT">
-						<Offset>
-							<AbsDimension x="25" y="-28"/>
-						</Offset>
-					</Anchor>
-				</Anchors>
-				<Scripts>
-					<OnClick>
-						local success, err = pcall(function()
-							WHTM.currentView = "log"
-							WHTM:UpdateDisplay()
-						end)
-						if not success then
-							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Log button: " .. tostring(err))
-						end
-					</OnClick>
-				</Scripts>
-			</Button>
-			
-			<Button name="$parentStatsButton" inherits="UIPanelButtonTemplate" text="Stats">
-				<Size>
-					<AbsDimension x="100" y="22"/>
-				</Size>
-				<Anchors>
-					<Anchor point="TOPLEFT" relativeTo="$parentLogButton" relativePoint="TOPRIGHT">
-						<Offset>
-							<AbsDimension x="5" y="0"/>
-						</Offset>
-					</Anchor>
-				</Anchors>
-				<Scripts>
-					<OnClick>
-						local success, err = pcall(function()
-							WHTM.currentView = "stats"
-							WHTM:UpdateDisplay()
-						end)
-						if not success then
-							DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000[WHTM Error]|r Stats button: " .. tostring(err))
-						end
-					</OnClick>
-				</Scripts>
-			</Button>
-			
 			<!-- Relative Time Checkbox -->
 			<CheckButton name="$parentRelativeTimeCheck">
 				<Size>
 					<AbsDimension x="24" y="24"/>
 				</Size>
 				<Anchors>
-					<Anchor point="TOPLEFT" relativeTo="$parentStatsButton" relativePoint="TOPRIGHT">
+					<Anchor point="TOPLEFT">
 						<Offset>
-							<AbsDimension x="20" y="0"/>
+							<AbsDimension x="20" y="-30"/>
 						</Offset>
 					</Anchor>
 				</Anchors>
