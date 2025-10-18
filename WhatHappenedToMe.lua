@@ -86,8 +86,9 @@ function WHTM:ParseSource(msg)
 end
 
 function WHTM:CreateEntry(msg, evType)
-	local hp, maxhp = UnitHealth("player"), UnitHealthMax("player")
-	local pct = maxhp > 0 and math.floor((hp / maxhp) * 100) or 0
+	local hp = UnitHealth("player")
+    local maxHp = UnitHealthMax("player")
+	local pct = maxHp > 0 and math.floor((hp / maxHp) * 100) or 0
 	local prevPct = pct
 	local dmg, src = 0, nil
 	
@@ -106,18 +107,19 @@ function WHTM:CreateEntry(msg, evType)
 		end
 		
 		-- Vanilla fires events before health update, calculate projected HP
-		if dmg > 0 and maxhp > 0 then
+		if dmg > 0 and maxHp > 0 then
 			local after = hp - dmg
 			if after < 0 then after = 0 end
-			pct = math.floor((after / maxhp) * 100)
+			pct = math.floor((after / maxHp) * 100)
 		end
 		
 	elseif evType == "heal" then
 		dmg = self:ParseDamageAmount(msg)
-		if dmg > 0 and maxhp > 0 then
+		if dmg > 0 and maxHp > 0 then
 			local after = hp + dmg
-			if after > maxhp then after = maxhp end
-			pct = math.floor((after / maxhp) * 100)
+			if after > maxHp then after = maxHp
+            end
+			pct = math.floor((after / maxHp) * 100)
 		end
 	end
 	
@@ -127,7 +129,7 @@ function WHTM:CreateEntry(msg, evType)
 		message = msg,
 		type = evType,
 		health = hp,
-		maxHealth = maxhp,
+		maxHealth = maxHp,
 		healthPercent = pct,
 		prevHealthPercent = prevPct,
 		damage = dmg,
