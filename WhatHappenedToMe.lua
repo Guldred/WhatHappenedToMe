@@ -123,6 +123,7 @@ function WHTM:CreateEntry(msg, evType)
 	
 	return {
 		timestamp = GetTime(),
+		wallTime = time(),
 		message = msg,
 		type = evType,
 		health = hp,
@@ -204,15 +205,15 @@ local eventColors = {
 	death = "|cFFFF0000"
 }
 
-local function FormatTime(diff, relative)
-	if diff < 1 then
-		return relative and "0s" or "now"
-	elseif diff < 60 then
-		return relative and string.format("-%ds", diff) or string.format("%ds ago", diff)
-	else
-		local m, s = math.floor(diff / 60), math.floor(math.mod(diff, 60))
-		return relative and string.format("-%dm %ds", m, s) or string.format("%dm %ds ago", m, s)
-	end
+local function FormatTimestamp(wallTime)
+	return date("%H:%M:%S", wallTime)
+end
+
+local function FormatRelativeTime(diff)
+	if diff < 1 then return string.format("-%.1fs", diff) end
+	if diff < 60 then return string.format("-%.1fs", diff) end
+	local m, s = math.floor(diff / 60), math.floor(math.mod(diff, 60))
+	return string.format("-%dm %ds", m, s)
 end
 
 function WHTM:UpdateDisplay()
@@ -224,12 +225,17 @@ function WHTM:UpdateDisplay()
 		return
 	end
 	
-	local refTime = WhatHappenedToMeDB.relativeToLastEvent and entries[table.getn(entries)].timestamp or GetTime()
 	local text = "|cFF00FF00=== Combat Log ===|r\n\n"
 	
 	for i = 1, table.getn(entries) do
 		local e = entries[i]
-		local timeStr = FormatTime(math.floor(refTime - e.timestamp), WhatHappenedToMeDB.relativeToLastEvent)
+		local timeStr
+		if WhatHappenedToMeDB.relativeToLastEvent then
+			local lastTime = entries[table.getn(entries)].timestamp
+			timeStr = FormatRelativeTime(lastTime - e.timestamp)
+		else
+			timeStr = FormatTimestamp(e.wallTime or time())
+		end
 		local color = eventColors[e.type] or "|cFFFFFFFF"
 		local dmgStr = (e.damage and e.damage > 0 and WhatHappenedToMeDB.showDamageNumbers) and 
 		               string.format(" |cFFFF6666[-%d]|r", e.damage) or ""
