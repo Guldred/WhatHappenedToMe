@@ -3,7 +3,8 @@ WHTM = {
 	inCombat = false,
 	lastCombatTime = 0,
 	playerName = nil,
-	damageStats = {}
+	damageStats = {},
+	initialized = false
 }
 
 local defaults =
@@ -19,6 +20,8 @@ local defaults =
 }
 
 function WHTM:Initialize()
+	if self.initialized then return end
+	
 	if not WhatHappenedToMeDB then WhatHappenedToMeDB = {} end
 	
 	for k, v in pairs(defaults) do
@@ -31,6 +34,7 @@ function WHTM:Initialize()
 	self.playerName = UnitName("player")
 	self:RegisterEvents()
 	self:RegisterSlashCommands()
+	self.initialized = true
 	
 	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00What Happened To Me|r loaded. Type |cFFFFFF00/whtm|r to show window.")
 end
