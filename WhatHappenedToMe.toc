@@ -1,6 +1,6 @@
 ## Interface: 11200
 ## Title: What Happened To Me
-## Notes: Combat log tracker showing what happened to you before death
+## Notes: Combat log tracker showing what happened to you
 ## Author: Guldred
 ## Version: 1.0.2
 ## SavedVariables: WhatHappenedToMeDB
