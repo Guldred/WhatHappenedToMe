@@ -4,7 +4,9 @@ WHTM = {
 	lastCombatTime = 0,
 	playerName = nil,
 	damageStats = {},
-	initialized = false
+	initialized = false,
+	viewingDeathIndex = nil,
+	MAX_DEATH_HISTORY = 5
 }
 
 local defaults =
@@ -16,7 +18,8 @@ local defaults =
 	trackMisses = true,
 	autoShowDelay = 1.0,
 	showDamageNumbers = true,
-	relativeToLastEvent = false
+	relativeToLastEvent = false,
+	deathHistory = {}
 }
 
 function WHTM:Initialize()
@@ -155,6 +158,7 @@ function WHTM:OnEvent()
 		self:Initialize()
 	elseif event == "PLAYER_DEAD" then
 		AddEntry("You have died.", "death")
+		self:SaveDeathSnapshot()
 		if WhatHappenedToMeDB.showOnDeath then
 			self.deathTime = GetTime()
 			self.showScheduled = true
@@ -204,6 +208,114 @@ function WHTM:OnUpdate(elapsed)
 	end
 end
 
+function WHTM:SaveDeathSnapshot()
+	local entries = self.buffer:GetAll()
+	if table.getn(entries) == 0 then return end
+	
+	local snapshot = {
+		timestamp = time(),
+		zone = GetZoneText() or "Unknown",
+		subzone = GetSubZoneText() or "",
+		level = UnitLevel("player"),
+		entries = {}
+	}
+	
+	for i = 1, table.getn(entries) do
+		local e = entries[i]
+		table.insert(snapshot.entries, {
+			timestamp = e.timestamp,
+			wallTime = e.wallTime,
+			message = e.message,
+			type = e.type,
+			health = e.health,
+			maxHealth = e.maxHealth,
+			healthPercent = e.healthPercent,
+			prevHealthPercent = e.prevHealthPercent,
+			damage = e.damage,
+			source = e.source
+		})
+	end
+	
+	table.insert(WhatHappenedToMeDB.deathHistory, snapshot)
+	
+	while table.getn(WhatHappenedToMeDB.deathHistory) > self.MAX_DEATH_HISTORY do
+		table.remove(WhatHappenedToMeDB.deathHistory, 1)
+	end
+	
+	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r Death recorded. Use dropdown or |cFFFFFF00/whtm deaths|r to view.")
+end
+
+function WHTM:GetDeathHistory()
+	return WhatHappenedToMeDB.deathHistory or {}
+end
+
+function WHTM:ViewDeath(index)
+	local history = self:GetDeathHistory()
+	if index < 1 or index > table.getn(history) then
+		DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000WHTM:|r Invalid death index.")
+		return
+	end
+	
+	self.viewingDeathIndex = index
+	WhatHappenedToMeFrame:Show()
+	self:UpdateDisplay()
+end
+
+function WHTM:ViewLiveCombat()
+	self.viewingDeathIndex = nil
+	self:UpdateDisplay()
+end
+
+function WHTM:InitDeathDropdown()
+	local dropdown = WhatHappenedToMeFrameDeathDropDown
+	if not dropdown then return end
+	
+	UIDropDownMenu_Initialize(dropdown, function()
+		local info = {}
+		
+		info.text = "Live"
+		info.value = "live"
+		info.func = function()
+			WHTM.viewingDeathIndex = nil
+			UIDropDownMenu_SetSelectedValue(dropdown, "live")
+			WHTM:UpdateDisplay()
+		end
+		info.checked = (WHTM.viewingDeathIndex == nil)
+		UIDropDownMenu_AddButton(info)
+		
+		local history = WHTM:GetDeathHistory()
+		for i = 1, table.getn(history) do
+			local death = history[i]
+			local timeStr = date("%H:%M", death.timestamp)
+			local deathIndex = i
+			
+			info = {}
+			info.text = "Death " .. timeStr
+			info.value = deathIndex
+			info.func = function()
+				WHTM.viewingDeathIndex = deathIndex
+				UIDropDownMenu_SetSelectedValue(dropdown, deathIndex)
+				WHTM:UpdateDisplay()
+			end
+			info.checked = (WHTM.viewingDeathIndex == deathIndex)
+			UIDropDownMenu_AddButton(info)
+		end
+	end)
+	
+	UIDropDownMenu_SetWidth(120, dropdown)
+	
+	if self.viewingDeathIndex then
+		UIDropDownMenu_SetSelectedValue(dropdown, self.viewingDeathIndex)
+		local history = self:GetDeathHistory()
+		local death = history[self.viewingDeathIndex]
+		if death then
+			UIDropDownMenu_SetText("Death " .. date("%H:%M", death.timestamp), dropdown)
+		end
+	else
+		UIDropDownMenu_SetSelectedValue(dropdown, "live")
+		UIDropDownMenu_SetText("Live", dropdown)
+	end
+end
 
 local eventColors = {
 	damage = "|cFFFF4444", spell = "|cFFFF4444", dot = "|cFFFF4444",
@@ -225,13 +337,34 @@ end
 function WHTM:UpdateDisplay()
 	if not WhatHappenedToMeFrame:IsVisible() then return end
 	
-	local entries = self.buffer:GetAll()
+	self:InitDeathDropdown()
+	
+	local entries
+	local headerText
+	
+	if self.viewingDeathIndex then
+		local history = self:GetDeathHistory()
+		local death = history[self.viewingDeathIndex]
+		if death then
+			entries = death.entries
+			local timeStr = date("%m/%d %H:%M:%S", death.timestamp)
+			local zoneStr = death.subzone ~= "" and (death.zone .. " - " .. death.subzone) or death.zone
+			headerText = string.format("|cFFFF4444=== Death #%d ===|r\n|cFFAAAAAA%s @ %s (Level %d)|r\n\n", 
+				self.viewingDeathIndex, timeStr, zoneStr, death.level or 0)
+		else
+			entries = {}
+		end
+	else
+		entries = self.buffer:GetAll()
+		headerText = "|cFF00FF00=== Live Combat Log ===|r\n\n"
+	end
+	
 	if table.getn(entries) == 0 then
 		WhatHappenedToMeFrameScrollFrameScrollChildFrameText:SetText("|cFFFFFF00No combat events recorded.|r\n")
 		return
 	end
 	
-	local text = "|cFF00FF00=== Combat Log ===|r\n\n"
+	local text = headerText
 	
 	for i = 1, table.getn(entries) do
 		local e = entries[i]
@@ -324,7 +457,28 @@ function WHTM:ExportToChat()
 		end
 	end
 	
-	local entries = self.buffer:GetRecent(count)
+	local allEntries
+	local sourceLabel
+	
+	if self.viewingDeathIndex then
+		local history = self:GetDeathHistory()
+		local death = history[self.viewingDeathIndex]
+		if death then
+			allEntries = death.entries
+			sourceLabel = "Death " .. date("%H:%M", death.timestamp)
+		else
+			allEntries = {}
+		end
+	else
+		allEntries = self.buffer:GetAll()
+		sourceLabel = "Live"
+	end
+	
+	local entries = {}
+	for i = math.max(1, table.getn(allEntries) - count + 1), table.getn(allEntries) do
+		table.insert(entries, allEntries[i])
+	end
+	
 	if table.getn(entries) == 0 then
 		DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000WHTM:|r No events to export.")
 		return
@@ -355,7 +509,7 @@ function WHTM:ExportToChat()
 	end
 	
 	WhatHappenedToMeExportDialog:Hide()
-	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r Exported " .. table.getn(entries) .. " events to " .. channel .. ".")
+	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r Exported " .. table.getn(entries) .. " events (" .. sourceLabel .. ") to " .. channel .. ".")
 end
 
 
@@ -403,6 +557,33 @@ function WHTM:RegisterSlashCommands()
 			else
 				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00Buffer size:|r " .. WhatHappenedToMeDB.bufferSize)
 			end
+		elseif cmd == "deaths" then
+			local history = WHTM:GetDeathHistory()
+			local count = table.getn(history)
+			if count == 0 then
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r No deaths recorded yet.")
+			else
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM Death History:|r")
+				for i = 1, count do
+					local d = history[i]
+					local timeStr = date("%m/%d %H:%M:%S", d.timestamp)
+					local zoneStr = d.subzone ~= "" and (d.zone .. " - " .. d.subzone) or d.zone
+					DEFAULT_CHAT_FRAME:AddMessage(string.format("  |cFFFFFF00%d.|r %s @ %s (Lvl %d) - %d events", 
+						i, timeStr, zoneStr, d.level or 0, table.getn(d.entries)))
+				end
+				DEFAULT_CHAT_FRAME:AddMessage("Use |cFFFFFF00/whtm death <n>|r to view a specific death.")
+			end
+		elseif string.find(cmd, "^death%s+%d+") then
+			local _, _, idx = string.find(cmd, "^death%s+(%d+)")
+			if idx then
+				WHTM:ViewDeath(tonumber(idx))
+			end
+		elseif cmd == "live" then
+			WHTM:ViewLiveCombat()
+			frame:Show()
+		elseif cmd == "cleardeaths" then
+			WhatHappenedToMeDB.deathHistory = {}
+			DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r Death history cleared.")
 		elseif cmd == "help" then
 			local help = {
 				"|cFF00FF00WHTM Commands:|r",
@@ -411,7 +592,11 @@ function WHTM:RegisterSlashCommands()
 				"|cFFFFFF00/whtm toggle|r - Toggle window",
 				"|cFFFFFF00/whtm relative|r - Toggle relative time",
 				"|cFFFFFF00/whtm buffersize [n]|r - Set buffer size (10-1000)",
-				"|cFFFFFF00/whtm clear|r - Clear log"
+				"|cFFFFFF00/whtm clear|r - Clear log",
+				"|cFFFFFF00/whtm deaths|r - List saved deaths",
+				"|cFFFFFF00/whtm death <n>|r - View death #n",
+				"|cFFFFFF00/whtm live|r - Return to live combat view",
+				"|cFFFFFF00/whtm cleardeaths|r - Clear death history"
 			}
 			for _, line in ipairs(help) do
 				DEFAULT_CHAT_FRAME:AddMessage(line)
