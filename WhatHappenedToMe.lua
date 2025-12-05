@@ -158,9 +158,9 @@ function WHTM:OnEvent()
 		self:Initialize()
 	elseif event == "PLAYER_DEAD" then
 		AddEntry("You have died.", "death")
-		self:SaveDeathSnapshot()
+		self.deathTime = GetTime()
+		self.snapshotScheduled = true
 		if WhatHappenedToMeDB.showOnDeath then
-			self.deathTime = GetTime()
 			self.showScheduled = true
 		end
 	elseif event == "PLAYER_REGEN_DISABLED" then
@@ -198,13 +198,23 @@ function WHTM:OnEvent()
 	end
 end
 
+local SNAPSHOT_DELAY = 1.0
+
 function WHTM:OnUpdate(elapsed)
-	if self.showScheduled and self.deathTime and
-	   GetTime() - self.deathTime >= WhatHappenedToMeDB.autoShowDelay then
-		self.showScheduled = false
-		self.deathTime = nil
-		WhatHappenedToMeFrame:Show()
-		self:UpdateDisplay()
+	if self.deathTime then
+		local timeSinceDeath = GetTime() - self.deathTime
+		
+		if self.snapshotScheduled and timeSinceDeath >= SNAPSHOT_DELAY then
+			self.snapshotScheduled = false
+			self:SaveDeathSnapshot()
+		end
+		
+		if self.showScheduled and timeSinceDeath >= WhatHappenedToMeDB.autoShowDelay then
+			self.showScheduled = false
+			self.deathTime = nil
+			WhatHappenedToMeFrame:Show()
+			self:UpdateDisplay()
+		end
 	end
 end
 
