@@ -129,7 +129,7 @@
 					</Frame>
 					
 					<!-- Export Button (Right) -->
-					<Button name="$parentExportButton" inherits="UIPanelButtonTemplate" text="Export">
+					<Button name="$parentExportButton" inherits="UIPanelButtonTemplate" text="To Chat">
 						<Size>
 							<AbsDimension x="70" y="22"/>
 						</Size>
