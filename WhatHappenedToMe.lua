@@ -267,7 +267,7 @@ function WHTM:ViewLiveCombat()
 end
 
 function WHTM:InitDeathDropdown()
-	local dropdown = WhatHappenedToMeFrameDeathDropDown
+	local dropdown = WhatHappenedToMeFrameToolbarDeathDropDown
 	if not dropdown then return end
 	
 	UIDropDownMenu_Initialize(dropdown, function()
