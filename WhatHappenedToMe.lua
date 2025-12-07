@@ -218,45 +218,77 @@ function WHTM:OnUpdate(elapsed)
 	end
 end
 
+function WHTM:GetCharacterKey()
+	local name = UnitName("player") or "Unknown"
+	local realm = GetRealmName() or "Unknown"
+	return name .. "-" .. realm
+end
+
+function WHTM:GetCharacterDeathHistory()
+	local key = self:GetCharacterKey()
+	if not WhatHappenedToMeDB.deathHistoryByChar then
+		WhatHappenedToMeDB.deathHistoryByChar = {}
+	end
+	if not WhatHappenedToMeDB.deathHistoryByChar[key] then
+		WhatHappenedToMeDB.deathHistoryByChar[key] = {}
+	end
+	return WhatHappenedToMeDB.deathHistoryByChar[key]
+end
+
 function WHTM:SaveDeathSnapshot()
-	local entries = self.buffer:GetAll()
-	if table.getn(entries) == 0 then return end
+	local success, err = pcall(function()
+		local entries = self.buffer:GetAll()
+		if table.getn(entries) == 0 then return end
+		
+		local zone = ""
+		local subzone = ""
+		local level = 0
+		
+		pcall(function() zone = GetZoneText() or "" end)
+		pcall(function() subzone = GetSubZoneText() or "" end)
+		pcall(function() level = UnitLevel("player") or 0 end)
+		
+		local snapshot = {
+			timestamp = time(),
+			zone = zone,
+			subzone = subzone,
+			level = level,
+			entries = {}
+		}
+		
+		for i = 1, table.getn(entries) do
+			local e = entries[i]
+			table.insert(snapshot.entries, {
+				timestamp = e.timestamp,
+				wallTime = e.wallTime,
+				message = e.message,
+				type = e.type,
+				health = e.health,
+				maxHealth = e.maxHealth,
+				healthPercent = e.healthPercent,
+				prevHealthPercent = e.prevHealthPercent,
+				damage = e.damage,
+				source = e.source
+			})
+		end
+		
+		local history = self:GetCharacterDeathHistory()
+		table.insert(history, snapshot)
+		
+		while table.getn(history) > self.MAX_DEATH_HISTORY do
+			table.remove(history, 1)
+		end
+	end)
 	
-	local snapshot = {
-		timestamp = time(),
-		zone = GetZoneText() or "Unknown",
-		subzone = GetSubZoneText() or "",
-		level = UnitLevel("player"),
-		entries = {}
-	}
-	
-	for i = 1, table.getn(entries) do
-		local e = entries[i]
-		table.insert(snapshot.entries, {
-			timestamp = e.timestamp,
-			wallTime = e.wallTime,
-			message = e.message,
-			type = e.type,
-			health = e.health,
-			maxHealth = e.maxHealth,
-			healthPercent = e.healthPercent,
-			prevHealthPercent = e.prevHealthPercent,
-			damage = e.damage,
-			source = e.source
-		})
+	if success then
+		DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r Death recorded. Use dropdown or |cFFFFFF00/whtm deaths|r to view.")
+	else
+		DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000WHTM:|r Failed to record death: " .. tostring(err))
 	end
-	
-	table.insert(WhatHappenedToMeDB.deathHistory, snapshot)
-	
-	while table.getn(WhatHappenedToMeDB.deathHistory) > self.MAX_DEATH_HISTORY do
-		table.remove(WhatHappenedToMeDB.deathHistory, 1)
-	end
-	
-	DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r Death recorded. Use dropdown or |cFFFFFF00/whtm deaths|r to view.")
 end
 
 function WHTM:GetDeathHistory()
-	return WhatHappenedToMeDB.deathHistory or {}
+	return self:GetCharacterDeathHistory()
 end
 
 function WHTM:ViewDeath(index)
