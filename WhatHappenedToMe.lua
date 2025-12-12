@@ -6,7 +6,7 @@ WHTM = {
 	damageStats = {},
 	initialized = false,
 	viewingDeathIndex = nil,
-	MAX_DEATH_HISTORY = 5
+	deathHistory = {}
 }
 
 local defaults =
@@ -18,8 +18,7 @@ local defaults =
 	trackMisses = true,
 	autoShowDelay = 1.0,
 	showDamageNumbers = true,
-	relativeToLastEvent = false,
-	deathHistory = {}
+	relativeToLastEvent = false
 }
 
 function WHTM:Initialize()
@@ -218,46 +217,20 @@ function WHTM:OnUpdate(elapsed)
 	end
 end
 
-function WHTM:GetCharacterKey()
-	local name = UnitName("player") or "Unknown"
-	local realm = GetRealmName() or "Unknown"
-	return name .. "-" .. realm
-end
-
-function WHTM:GetCharacterDeathHistory()
-	local key = self:GetCharacterKey()
-	if not WhatHappenedToMeDB.deathHistoryByChar then
-		WhatHappenedToMeDB.deathHistoryByChar = {}
-	end
-	if not WhatHappenedToMeDB.deathHistoryByChar[key] then
-		WhatHappenedToMeDB.deathHistoryByChar[key] = {}
-	end
-	return WhatHappenedToMeDB.deathHistoryByChar[key]
-end
-
 function WHTM:SaveDeathSnapshot()
-	local success, err = pcall(function()
-		local entries = self.buffer:GetAll()
-		if table.getn(entries) == 0 then return end
-		
-		local zone = ""
-		local subzone = ""
-		local level = 0
-		
-		pcall(function() zone = GetZoneText() or "" end)
-		pcall(function() subzone = GetSubZoneText() or "" end)
-		pcall(function() level = UnitLevel("player") or 0 end)
-		
-		local snapshot = {
-			timestamp = time(),
-			zone = zone,
-			subzone = subzone,
-			level = level,
-			entries = {}
-		}
-		
-		for i = 1, table.getn(entries) do
-			local e = entries[i]
+	local entries = self.buffer:GetAll()
+	if not entries or table.getn(entries) == 0 then
+		return
+	end
+	
+	local snapshot = {
+		timestamp = time(),
+		entries = {}
+	}
+	
+	for i = 1, table.getn(entries) do
+		local e = entries[i]
+		if e then
 			table.insert(snapshot.entries, {
 				timestamp = e.timestamp,
 				wallTime = e.wallTime,
@@ -271,24 +244,16 @@ function WHTM:SaveDeathSnapshot()
 				source = e.source
 			})
 		end
-		
-		local history = self:GetCharacterDeathHistory()
-		table.insert(history, snapshot)
-		
-		while table.getn(history) > self.MAX_DEATH_HISTORY do
-			table.remove(history, 1)
-		end
-	end)
+	end
 	
-	if success then
-		DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r Death recorded. Use dropdown or |cFFFFFF00/whtm deaths|r to view.")
-	else
-		DEFAULT_CHAT_FRAME:AddMessage("|cFFFF0000WHTM:|r Failed to record death: " .. tostring(err))
+	if table.getn(snapshot.entries) > 0 then
+		table.insert(self.deathHistory, snapshot)
+		DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r Death #" .. table.getn(self.deathHistory) .. " recorded.")
 	end
 end
 
 function WHTM:GetDeathHistory()
-	return self:GetCharacterDeathHistory()
+	return self.deathHistory
 end
 
 function WHTM:ViewDeath(index)
@@ -389,10 +354,9 @@ function WHTM:UpdateDisplay()
 		local death = history[self.viewingDeathIndex]
 		if death then
 			entries = death.entries
-			local timeStr = date("%m/%d %H:%M:%S", death.timestamp)
-			local zoneStr = death.subzone ~= "" and (death.zone .. " - " .. death.subzone) or death.zone
-			headerText = string.format("|cFFFF4444=== Death #%d ===|r\n|cFFAAAAAA%s @ %s (Level %d)|r\n\n", 
-				self.viewingDeathIndex, timeStr, zoneStr, death.level or 0)
+			local timeStr = date("%H:%M:%S", death.timestamp)
+			headerText = string.format("|cFFFF4444=== Death #%d (%s) ===|r\n\n", 
+				self.viewingDeathIndex, timeStr)
 		else
 			entries = {}
 		end
@@ -603,17 +567,16 @@ function WHTM:RegisterSlashCommands()
 			local history = WHTM:GetDeathHistory()
 			local count = table.getn(history)
 			if count == 0 then
-				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r No deaths recorded yet.")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r No deaths recorded this session.")
 			else
-				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM Death History:|r")
+				DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM Death History (this session):|r")
 				for i = 1, count do
 					local d = history[i]
-					local timeStr = date("%m/%d %H:%M:%S", d.timestamp)
-					local zoneStr = d.subzone ~= "" and (d.zone .. " - " .. d.subzone) or d.zone
-					DEFAULT_CHAT_FRAME:AddMessage(string.format("  |cFFFFFF00%d.|r %s @ %s (Lvl %d) - %d events", 
-						i, timeStr, zoneStr, d.level or 0, table.getn(d.entries)))
+					local timeStr = date("%H:%M:%S", d.timestamp)
+					DEFAULT_CHAT_FRAME:AddMessage(string.format("  |cFFFFFF00%d.|r %s - %d events", 
+						i, timeStr, table.getn(d.entries)))
 				end
-				DEFAULT_CHAT_FRAME:AddMessage("Use |cFFFFFF00/whtm death <n>|r to view a specific death.")
+				DEFAULT_CHAT_FRAME:AddMessage("Use |cFFFFFF00/whtm death <n>|r or the dropdown to view.")
 			end
 		elseif string.find(cmd, "^death%s+%d+") then
 			local _, _, idx = string.find(cmd, "^death%s+(%d+)")
@@ -623,9 +586,6 @@ function WHTM:RegisterSlashCommands()
 		elseif cmd == "live" then
 			WHTM:ViewLiveCombat()
 			frame:Show()
-		elseif cmd == "cleardeaths" then
-			WhatHappenedToMeDB.deathHistory = {}
-			DEFAULT_CHAT_FRAME:AddMessage("|cFF00FF00WHTM:|r Death history cleared.")
 		elseif cmd == "help" then
 			local help = {
 				"|cFF00FF00WHTM Commands:|r",
@@ -634,11 +594,10 @@ function WHTM:RegisterSlashCommands()
 				"|cFFFFFF00/whtm toggle|r - Toggle window",
 				"|cFFFFFF00/whtm relative|r - Toggle relative time",
 				"|cFFFFFF00/whtm buffersize [n]|r - Set buffer size (10-1000)",
-				"|cFFFFFF00/whtm clear|r - Clear log",
-				"|cFFFFFF00/whtm deaths|r - List saved deaths",
+				"|cFFFFFF00/whtm clear|r - Clear live log",
+				"|cFFFFFF00/whtm deaths|r - List deaths (this session)",
 				"|cFFFFFF00/whtm death <n>|r - View death #n",
-				"|cFFFFFF00/whtm live|r - Return to live combat view",
-				"|cFFFFFF00/whtm cleardeaths|r - Clear death history"
+				"|cFFFFFF00/whtm live|r - Return to live combat view"
 			}
 			for _, line in ipairs(help) do
 				DEFAULT_CHAT_FRAME:AddMessage(line)
