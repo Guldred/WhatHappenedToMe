@@ -6,7 +6,8 @@ WHTM = {
 	damageStats = {},
 	initialized = false,
 	viewingDeathIndex = nil,
-	deathHistory = {}
+	deathHistory = {},
+	pendingDeathSnapshot = nil
 }
 
 local defaults =
@@ -20,6 +21,8 @@ local defaults =
 	showDamageNumbers = true,
 	relativeToLastEvent = false
 }
+
+local SNAPSHOT_DELAY = 1.0
 
 function WHTM:Initialize()
 	if self.initialized then return end
@@ -158,10 +161,19 @@ function WHTM:OnEvent()
 	elseif event == "PLAYER_DEAD" then
 		AddEntry("You have died.", "death")
 		self.deathTime = GetTime()
-		self.snapshotScheduled = true
+		self.pendingDeathSnapshot = {
+			deathTime = self.deathTime,
+			cutoffTime = self.deathTime + SNAPSHOT_DELAY,
+			wallTime = time()
+		}
 		if WhatHappenedToMeDB.showOnDeath then
 			self.showScheduled = true
+		else
+			self.showScheduled = false
 		end
+	elseif event == "PLAYER_ALIVE" or event == "PLAYER_UNGHOST" then
+		self.showScheduled = false
+		self.deathTime = nil
 	elseif event == "PLAYER_REGEN_DISABLED" then
 		self.inCombat = true
 		self.lastCombatTime = GetTime()
@@ -197,18 +209,21 @@ function WHTM:OnEvent()
 	end
 end
 
-local SNAPSHOT_DELAY = 1.0
-
 function WHTM:OnUpdate(elapsed)
-	if self.deathTime then
-		local timeSinceDeath = GetTime() - self.deathTime
-		
-		if self.snapshotScheduled and timeSinceDeath >= SNAPSHOT_DELAY then
-			self.snapshotScheduled = false
-			self:SaveDeathSnapshot()
+	local now = GetTime()
+	
+	if self.pendingDeathSnapshot and now >= self.pendingDeathSnapshot.cutoffTime then
+		local pending = self.pendingDeathSnapshot
+		self.pendingDeathSnapshot = nil
+		self:SaveDeathSnapshot(pending)
+		if not self.showScheduled then
+			self.deathTime = nil
 		end
-		
-		if self.showScheduled and timeSinceDeath >= WhatHappenedToMeDB.autoShowDelay then
+	end
+	
+	if self.deathTime and self.showScheduled then
+		local timeSinceDeath = now - self.deathTime
+		if timeSinceDeath >= WhatHappenedToMeDB.autoShowDelay then
 			self.showScheduled = false
 			self.deathTime = nil
 			WhatHappenedToMeFrame:Show()
@@ -217,20 +232,22 @@ function WHTM:OnUpdate(elapsed)
 	end
 end
 
-function WHTM:SaveDeathSnapshot()
+function WHTM:SaveDeathSnapshot(pending)
 	local entries = self.buffer:GetAll()
 	if not entries or table.getn(entries) == 0 then
 		return
 	end
 	
 	local snapshot = {
-		timestamp = time(),
+		timestamp = (pending and pending.wallTime) or time(),
 		entries = {}
 	}
 	
+	local cutoffTime = pending and pending.cutoffTime or nil
+	
 	for i = 1, table.getn(entries) do
 		local e = entries[i]
-		if e then
+		if e and (not cutoffTime or (e.timestamp and e.timestamp <= cutoffTime)) then
 			table.insert(snapshot.entries, {
 				timestamp = e.timestamp,
 				wallTime = e.wallTime,
